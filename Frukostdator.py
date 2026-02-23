@@ -26,11 +26,33 @@ def get_food_and_info(df):
         foods[name] = value
     return foods
 
+def get_data_from_scanner(foods):
+    total_energi = 0
+    total_fett = 0
+    total_protein = 0
+    total_kolhydrater = 0
+    
+    while True:
+        scanned_data = "Hej" #Ska va input() här 
+        
+        if scanned_data in foods:
+            info = foods[scanned_data]
+            total_energi += info["Energi"]
+            total_fett += info["Fett"]
+            total_protein += info["Protein"]
+            total_kolhydrater += info["Kolhydrater"]
+
+        else:
+            print("Livsmedel ej hittat")
+
 
 
 
 my_df = get_excel_file()
 my_foods_dict = get_food_and_info(my_df)
+
+
+
 
 #print(list(my_foods_dict.items())[:5])
 #print(my_foods_dict.values())[:5]
