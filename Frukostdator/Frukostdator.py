@@ -4,7 +4,7 @@ import pandas as pd
 
 def get_excel_file():
    
-    df = pd.read_excel("LivsmedelsDB_202602231534.xlsx",header = 2)
+    df = pd.read_excel("LivsmedelsDB_202602231534.xlsx",header = 2) #Källa:Livsmedelsverket
 
     return df
 
