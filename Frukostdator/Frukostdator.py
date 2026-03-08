@@ -26,25 +26,24 @@ def get_food_and_info(df):
         foods[name] = value
     return foods
 
-def get_data_from_scanner(foods,scanned_data):
+def get_data_from_scanner(foods,food_list):
     total_energi = 0
     total_fett = 0
     total_protein = 0
     total_socker = 0
 
-    while True:
-        
-        if scanned_data in foods:
-            info = foods[scanned_data]
+
+    for food in food_list:
+
+        if food in foods:
+            info = foods[food]
+
             total_energi += info["Energi"]
             total_fett += info["Fett"]
             total_protein += info["Protein"]
             total_socker += info["Socker"]
-        else:
-            return None
-        
-        return [total_energi,total_fett,total_protein,total_socker]
 
+    return [total_energi, total_fett, total_protein, total_socker]
 
 
 

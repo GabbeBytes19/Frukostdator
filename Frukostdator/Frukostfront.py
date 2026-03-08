@@ -54,7 +54,7 @@ class NutrientCard(BoxLayout):
 class FoodAppLayout(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", padding=20, spacing=15, **kwargs)
-
+        self.food_list = []
         # Bara en placeholder för input just nu
         self.input = TextInput(
             hint_text="Skriv matvara (tomat, banan, bröd)...",
@@ -63,14 +63,35 @@ class FoodAppLayout(BoxLayout):
         )
         self.add_widget(self.input)
 
-        self.button = Button(
-            text="Visa näringsinfo",
+        self.add_button = Button(
+            text="Lägg till livsmedel",
             size_hint=(1, 0.1),
             font_size=20,
             background_color=(0.3, 0.6, 1, 1)
         )
-        self.button.bind(on_press=self.show_food)
-        self.add_widget(self.button)
+
+        self.finish_button = Button(text="Handlat klart",
+            size_hint=(1, 0.1),
+            font_size=20,
+            background_color=(0.3, 0.6, 1, 1)
+
+        )
+
+        self.reset_button = Button(
+            text="Nollställ räknaren",
+            size_hint=(1, 0.1),
+            font_size=20,
+            background_color=(0.3, 0.6, 1, 1)
+        )
+
+        self.add_button.bind(on_press = self.add_food)
+        self.add_widget(self.add_button)
+
+        self.finish_button.bind(on_press=self.show_food)
+        self.add_widget(self.finish_button)
+
+        self.reset_button.bind(on_press=self.reset_foods)
+        self.add_widget(self.reset_button)
 
         self.scroll = ScrollView()
         self.cards_layout = GridLayout(cols=4, spacing=15, size_hint_y=None)
@@ -88,24 +109,37 @@ class FoodAppLayout(BoxLayout):
 ##################################################################
     
     
-    
-     
+    def add_food(self,instance):
+        scanned_data = self.input.text.strip()
+        if not scanned_data:
+            return 
 
-    
-    
+        if scanned_data in my_foods_dict:
+            self.food_list.append(scanned_data)
+            self.input.text = ""  
+        else:
+            self.clear_cards()
+            self.cards_layout.add_widget(
+                NutrientCard("Hittades inte", f"{scanned_data} finns inte i databasen", (0.4, 0.1, 0.1, 1))
+            )
+            
+            return
+        self.clear_cards()
 
     def show_food(self, instance):
-            scanned_data = self.input.text
+            
+            result_total = Frukostdator.get_data_from_scanner(my_foods_dict, self.food_list)
+         
 
-            result_total = Frukostdator.get_data_from_scanner(my_foods_dict,scanned_data)
-            self.clear_cards()
-
-            if scanned_data not in my_foods_dict:
+            if self.food_list == []:
+                self.clear_cards()
                 self.cards_layout.add_widget(
-                    NutrientCard("Hittades inte", "Testa någon annan mat", (0.4, 0.1, 0.1, 1))
-                )
+                    NutrientCard("Du har ej lagt till något livsmedel ännu", "gör detta innan du handlat klart", (0.4, 0.1, 0.1, 1))
+                    )
+        
                 return
-            print("hej")
+            
+            self.clear_cards()
             # Energi → meter löpning (ca 1 kcal ≈ 12 meter)
             meters = round(result_total[0] * 12)
             self.cards_layout.add_widget(
@@ -148,6 +182,18 @@ class FoodAppLayout(BoxLayout):
                     image_path="images/Protein.png"
                 )
             )
+
+
+
+    def reset_foods(self,instance):
+        self.food_list = []
+        result_total = Frukostdator.get_data_from_scanner(my_foods_dict, self.food_list)
+        self.clear_cards()
+        self.input.text = ""
+
+
+
+
 
 
 class FoodApp(App):
