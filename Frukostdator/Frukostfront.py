@@ -9,6 +9,7 @@ from kivy.animation import Animation
 from kivy.core.window import Window
 from kivy.graphics import Color, RoundedRectangle
 from kivy.uix.image import Image
+from kivy.uix.spinner import Spinner
 import Frukostdator
 my_df = Frukostdator.get_excel_file() #lstan
 my_foods_dict = Frukostdator.get_food_and_info(my_df) # sortera upp info
@@ -16,6 +17,19 @@ my_foods_dict = Frukostdator.get_food_and_info(my_df) # sortera upp info
 
 Window.clearcolor = (0.08, 0.08, 0.1, 1)
 
+
+def estimate_weight(age):
+    if age <= 10:
+        return (age + 4) * 2
+    elif age <= 20:
+        return (age * 3) + 7
+    else:
+        return 75
+
+
+def get_energy_multiplier(age):
+    weight = estimate_weight(age)
+    return 1000 / weight
 
 
 
@@ -62,6 +76,14 @@ class FoodAppLayout(BoxLayout):
             font_size=20
         )
         self.add_widget(self.input)
+
+        self.age_spinner = Spinner(
+            text="Välj ålder",
+            values=[str(i) for i in range(1,101)],
+            size_hint=(1,0.1),
+            font_size=20
+        )
+        self.add_widget(self.age_spinner)
 
         self.add_button = Button(
             text="Lägg till livsmedel",
@@ -139,15 +161,21 @@ class FoodAppLayout(BoxLayout):
         
                 return
             
+            if self.age_spinner.text == "Välj ålder":
+                return
+
+            age = int(self.age_spinner.text)
+
             self.clear_cards()
             # Energi → meter löpning (ca 1 kcal ≈ 12 meter)
-            meters = round(result_total[0] * 12)
+            multiplier = get_energy_multiplier(age)
+            meters = round(result_total[0] * multiplier)
             self.cards_layout.add_widget(
                 NutrientCard(
                     "Energi",
                     f"Du kan springa ca {meters} meter",
                     (0.9, 0.6, 0.1, 1),
-                    image_path="images/Energi.png"
+                    image_path="../images/Energi.png"
                 )
             )
 
@@ -158,7 +186,7 @@ class FoodAppLayout(BoxLayout):
                     "Socker",
                     f"{sugar_cubes} socker",
                     (0.9, 0.3, 0.4, 1),
-                    image_path="images/Socker.png"
+                    image_path="../images/Socker.png"
                 )
             )
 
@@ -169,7 +197,7 @@ class FoodAppLayout(BoxLayout):
                     "Fett",
                     f"{tablespoons} matskedar fett",
                     (0.8, 0.5, 0.2, 1),
-                    image_path="images/Fett.png"
+                    image_path="../images/Fett.png"
                 )
             )
 
@@ -179,7 +207,7 @@ class FoodAppLayout(BoxLayout):
                     "Protein",
                     f" {result_total[2]} gram protein",
                     (0.2, 0.6, 0.3, 1),
-                    image_path="images/Protein.png"
+                    image_path="../images/Protein.png"
                 )
             )
 
