@@ -226,6 +226,8 @@ class FoodAppLayout(BoxLayout):
 
         percent = round((kcal / daily_kcal) * 100) if daily_kcal > 0 else 0
 
+        multiplier = get_energy_multiplier(age)
+        meters = round(kcal * multiplier)
 
         protein_min_day = (daily_kcal * 0.10) / 4
         protein_max_day = (daily_kcal * 0.20) / 4
@@ -234,7 +236,6 @@ class FoodAppLayout(BoxLayout):
         fat_max_day = (daily_kcal * 0.40) / 9
 
         sugar_max_day = (daily_kcal * 0.10) / 4
-
 
         protein_min_breakfast = round(protein_min_day * 0.20)
         protein_max_breakfast = round(protein_max_day * 0.25)
@@ -247,21 +248,17 @@ class FoodAppLayout(BoxLayout):
         kcal_min_breakfast = round(daily_kcal * 0.20)
         kcal_max_breakfast = round(daily_kcal * 0.25)
 
-
         protein_percent_day = round((protein_g / protein_max_day) * 100) if protein_max_day > 0 else 0
         fat_percent_day = round((fat_g / fat_max_day) * 100) if fat_max_day > 0 else 0
-        sugar_percent_day = round((sugar_g / sugar_max_day) * 100) if sugar_max_day > 0 else 0
-
 
         self.cards_layout.add_widget(
             NutrientCard(
                 "Energi",
-                f"{kcal} kcal (mål {kcal_min_breakfast}-{kcal_max_breakfast} kcal)\n{percent}% av dagsintag ({round(daily_kcal)})",
+                f"{kcal} kcal • {meters} m (mål {kcal_min_breakfast}-{kcal_max_breakfast} kcal)\n{percent}% av dagsintag",
                 (0.9, 0.6, 0.1, 1),
                 image_path="../images/Energi.png"
             )
         )
-
 
         self.cards_layout.add_widget(
             NutrientCard(
@@ -272,7 +269,6 @@ class FoodAppLayout(BoxLayout):
             )
         )
 
-
         self.cards_layout.add_widget(
             NutrientCard(
                 "Fett",
@@ -281,7 +277,6 @@ class FoodAppLayout(BoxLayout):
                 image_path="../images/Fett.png"
             )
         )
-
 
         self.cards_layout.add_widget(
             NutrientCard(
