@@ -18,6 +18,7 @@ my_foods_dict = Frukostdator.get_food_and_info(my_df)
 Window.clearcolor = (0.08, 0.08, 0.1, 1)
 
 
+# -------------------- Beräkningsfunktioner --------------------
 def estimate_weight(age):
     if age <= 10:
         return (age + 4) * 2
@@ -75,6 +76,7 @@ def get_daily_calories(age, gender):
             return (male + female) / 2
 
 
+# -------------------- NutrientCard --------------------
 class NutrientCard(BoxLayout):
     def __init__(self, title, value_text, color, image_path=None, **kwargs):
         super().__init__(orientation="vertical", padding=15, size_hint_y=None, height=500, **kwargs)
@@ -103,62 +105,72 @@ class NutrientCard(BoxLayout):
         self.bg.size = self.size
 
 
+# -------------------- FoodAppLayout --------------------
 class FoodAppLayout(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", padding=20, spacing=15, **kwargs)
         self.food_list = []
-        self.gender = "other"
+        self.gender = None  # ingen kön valt än
 
+        # -------------------- Matwidgets (inaktiva initialt) --------------------
         self.input = TextInput(
             hint_text="Skriv matvara (tomat, banan, bröd)...",
             size_hint=(1, 0.1),
-            font_size=20
+            font_size=20,
+            opacity=0,
+            disabled=True
         )
         self.add_widget(self.input)
 
         self.age_spinner = Spinner(
             text="Välj ålder",
-            values=[str(i) for i in range(1,101)],
-            size_hint=(1,0.1),
-            font_size=20
+            values=[str(i) for i in range(1, 101)],
+            size_hint=(1, 0.1),
+            font_size=20,
+            opacity=0,
+            disabled=True
         )
         self.add_widget(self.age_spinner)
 
-        gender_layout = BoxLayout(size_hint=(1,0.1), spacing=10)
-
+        # -------------------- Kön --------------------
+        self.gender_layout = BoxLayout(size_hint=(1, 0.1), spacing=10)
         self.male_button = Button(text="Man")
         self.female_button = Button(text="Kvinna")
         self.other_button = Button(text="Vill ej ange")
 
-        self.male_button.bind(on_press=lambda x: setattr(self, "gender", "man"))
-        self.female_button.bind(on_press=lambda x: setattr(self, "gender", "kvinna"))
-        self.other_button.bind(on_press=lambda x: setattr(self, "gender", "other"))
+        self.male_button.bind(on_press=lambda x: self.set_gender_and_show_age("man"))
+        self.female_button.bind(on_press=lambda x: self.set_gender_and_show_age("kvinna"))
+        self.other_button.bind(on_press=lambda x: self.set_gender_and_show_age("other"))
 
-        gender_layout.add_widget(self.male_button)
-        gender_layout.add_widget(self.female_button)
-        gender_layout.add_widget(self.other_button)
+        self.gender_layout.add_widget(self.male_button)
+        self.gender_layout.add_widget(self.female_button)
+        self.gender_layout.add_widget(self.other_button)
+        self.add_widget(self.gender_layout)
 
-        self.add_widget(gender_layout)
-
+        # -------------------- Matknappar --------------------
         self.add_button = Button(
             text="Lägg till livsmedel",
             size_hint=(1, 0.1),
             font_size=20,
-            background_color=(0.3, 0.6, 1, 1)
+            background_color=(0.3, 0.6, 1, 1),
+            opacity=0,
+            disabled=True
         )
-
         self.finish_button = Button(
             text="Handlat klart",
             size_hint=(1, 0.1),
             font_size=20,
-            background_color=(0.3, 0.6, 1, 1)
+            background_color=(0.3, 0.6, 1, 1),
+            opacity=0,
+            disabled=True
         )
-
         self.reset_button = Button(
             text="Nollställ räknaren",
             size_hint=(1, 0.1),
             font_size=20,
-            background_color=(0.3, 0.6, 1, 1)
+            background_color=(0.3, 0.6, 1, 1),
+            opacity=0,
+            disabled=True
         )
 
         self.add_button.bind(on_press=self.add_food)
@@ -169,90 +181,90 @@ class FoodAppLayout(BoxLayout):
         self.add_widget(self.finish_button)
         self.add_widget(self.reset_button)
 
-        self.scroll = ScrollView()
+        # -------------------- Scroll --------------------
+        self.scroll = ScrollView(opacity=0, disabled=True)
         self.cards_layout = GridLayout(cols=4, spacing=15, size_hint_y=None)
         self.cards_layout.bind(minimum_height=self.cards_layout.setter('height'))
         self.scroll.add_widget(self.cards_layout)
-
         self.add_widget(self.scroll)
 
+        # -------------------- Bind åldersval --------------------
+        self.age_spinner.bind(text=self.show_food_widgets)
+
+    # -------------------- Funktioner för att visa widgets --------------------
+    def set_gender_and_show_age(self, gender):
+        self.gender = gender
+        # Ta bort könsknappar
+        Animation(opacity=0, duration=0.3).start(self.gender_layout)
+        self.gender_layout.disabled = True
+
+        # Visa åldersval
+        self.age_spinner.disabled = False
+        Animation(opacity=1, duration=0.5).start(self.age_spinner)
+
+    def show_food_widgets(self, spinner, value):
+        if value != "Välj ålder":
+            # Ta bort åldersspinner
+            Animation(opacity=0, duration=0.3).start(self.age_spinner)
+            self.age_spinner.disabled = True
+
+            # Visa matinput och knappar
+            for w in [self.input, self.add_button, self.finish_button, self.reset_button, self.scroll]:
+                w.disabled = False
+                Animation(opacity=1, duration=0.5).start(w)
+
+    # -------------------- Övriga funktioner --------------------
     def clear_cards(self):
         self.cards_layout.clear_widgets()
-
-
-##################################################################
 
     def add_food(self, instance):
         scanned_data = self.input.text.strip()
         if not scanned_data:
-            return 
-
+            return
         if scanned_data in my_foods_dict:
             self.food_list.append(scanned_data)
-            self.input.text = ""  
+            self.input.text = ""
         else:
             self.clear_cards()
             self.cards_layout.add_widget(
                 NutrientCard("Hittades inte", f"{scanned_data} finns inte i databasen", (0.4, 0.1, 0.1, 1))
             )
             return
-
         self.clear_cards()
 
     def show_food(self, instance):
-
-        result_total = Frukostdator.get_data_from_scanner(my_foods_dict, self.food_list)
-
-        if self.food_list == []:
+        if not self.food_list:
             self.clear_cards()
             self.cards_layout.add_widget(
                 NutrientCard("Du har ej lagt till något livsmedel ännu", "gör detta innan du handlat klart", (0.4, 0.1, 0.1, 1))
             )
             return
-
-        if self.age_spinner.text == "Välj ålder":
-            return
-
-        age = int(self.age_spinner.text)
-
+        age = int(self.age_spinner.text) if self.age_spinner.text != "Välj ålder" else 0
         self.clear_cards()
-
+        result_total = Frukostdator.get_data_from_scanner(my_foods_dict, self.food_list)
         daily_kcal = get_daily_calories(age, self.gender)
-
-        kcal = result_total[0]
-        fat_g = result_total[1]
-        protein_g = result_total[2]
-        sugar_g = result_total[3]
-
+        kcal, fat_g, protein_g, sugar_g = result_total
         percent = round((kcal / daily_kcal) * 100) if daily_kcal > 0 else 0
-
 
         protein_min_day = (daily_kcal * 0.10) / 4
         protein_max_day = (daily_kcal * 0.20) / 4
-
         fat_min_day = (daily_kcal * 0.25) / 9
         fat_max_day = (daily_kcal * 0.40) / 9
-
         sugar_max_day = (daily_kcal * 0.10) / 4
-
 
         protein_min_breakfast = round(protein_min_day * 0.20)
         protein_max_breakfast = round(protein_max_day * 0.25)
-
         fat_min_breakfast = round(fat_min_day * 0.20)
         fat_max_breakfast = round(fat_max_day * 0.25)
-
         sugar_max_breakfast = round(sugar_max_day * 0.25)
-
         kcal_min_breakfast = round(daily_kcal * 0.20)
         kcal_max_breakfast = round(daily_kcal * 0.25)
-
 
         protein_percent_day = round((protein_g / protein_max_day) * 100) if protein_max_day > 0 else 0
         fat_percent_day = round((fat_g / fat_max_day) * 100) if fat_max_day > 0 else 0
         sugar_percent_day = round((sugar_g / sugar_max_day) * 100) if sugar_max_day > 0 else 0
 
-
+        # Energi
         self.cards_layout.add_widget(
             NutrientCard(
                 "Energi",
@@ -262,7 +274,7 @@ class FoodAppLayout(BoxLayout):
             )
         )
 
-
+        # Socker
         self.cards_layout.add_widget(
             NutrientCard(
                 "Socker",
@@ -272,7 +284,7 @@ class FoodAppLayout(BoxLayout):
             )
         )
 
-
+        # Fett
         self.cards_layout.add_widget(
             NutrientCard(
                 "Fett",
@@ -282,7 +294,7 @@ class FoodAppLayout(BoxLayout):
             )
         )
 
-
+        # Protein
         self.cards_layout.add_widget(
             NutrientCard(
                 "Protein",
@@ -292,16 +304,17 @@ class FoodAppLayout(BoxLayout):
             )
         )
 
-
     def reset_foods(self, instance):
         self.food_list = []
         self.clear_cards()
         self.input.text = ""
 
 
+# -------------------- App --------------------
 class FoodApp(App):
     def build(self):
         return FoodAppLayout()
 
 
-FoodApp().run()
+if __name__ == "__main__":
+    FoodApp().run()
