@@ -179,7 +179,17 @@ class FoodAppLayout(BoxLayout):
         
         res = Frukostdator.get_data_from_scanner(my_foods_dict, self.food_list)
         self.clear_cards()
+
+
+        
+
         self.cards_layout.add_widget(NutrientCard("Energi", f"{round(res[0])} kcal", (0.9, 0.6, 0.1, 1)))
+
+
+
+
+
+
         self.cards_layout.add_widget(NutrientCard("Socker", f"{round(res[3], 1)} g", (0.9, 0.3, 0.4, 1)))
         self.cards_layout.add_widget(NutrientCard("Fett", f"{round(res[1], 1)} g", (0.8, 0.5, 0.2, 1)))
         self.cards_layout.add_widget(NutrientCard("Protein", f"{round(res[2], 1)} g", (0.2, 0.6, 0.3, 1)))
