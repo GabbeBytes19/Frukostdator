@@ -17,6 +17,60 @@ my_df = Frukostdator.get_excel_file()
 my_foods_dict = Frukostdator.get_food_and_info(my_df)
 
 Window.clearcolor = (0.08, 0.08, 0.1, 1)
+def estimate_weight(age):
+        if age <= 10:
+            return (age + 4) * 2
+        elif age <= 20:
+            return (age * 3) + 7
+        else:
+            return 75
+
+def get_daily_calories(age, gender):
+        if age <= 3:
+            return 1100
+        elif age <= 6:
+            return 1510
+        elif age <= 10:
+            return 1860
+        elif age <= 14:
+            if gender == "man":
+                return 2510
+            elif gender == "kvinna":
+                return 2200
+            else:
+                return (2510 + 2200) / 2
+        elif age <= 17:
+            if gender == "man":
+                return 3040
+            elif gender == "kvinna":
+                return 2410
+            else:
+                return (3040 + 2410) / 2
+        else:
+            if age <= 24:
+                male = 2800
+                female = 2200
+            elif age <= 50:
+                male = 2700
+                female = 2200
+            elif age <= 70:
+                male = 2500
+                female = 2000
+            else:
+                male = 2400
+                female = 2000
+
+        if gender == "man":
+            return male
+        elif gender == "kvinna":
+            return female
+        else:
+            return (male + female) / 2
+
+
+
+
+
 
 class NutrientCard(BoxLayout):
     def __init__(self, title, value_text, color, image_path=None, **kwargs):
@@ -169,6 +223,8 @@ class FoodAppLayout(BoxLayout):
         self.clear_cards()
         self.cards_layout.add_widget(NutrientCard(title, msg, (0.5, 0.1, 0.1, 1)))
 
+  
+
     def show_food(self, instance):
         self.has_pressed_button = True # Registrera aktivitet
         self.food_input.text = ""
@@ -180,19 +236,103 @@ class FoodAppLayout(BoxLayout):
         res = Frukostdator.get_data_from_scanner(my_foods_dict, self.food_list)
         self.clear_cards()
 
+        
+
+        age = int(self.age)
+
+        self.clear_cards()
+
+        daily_kcal = get_daily_calories(self.age, self.gender)
+
+        kcal = res[0]
+        fat_g = res[1]
+        protein_g = res[2]
+        sugar_g = res[3]
+
+        percent = round((kcal / daily_kcal) * 100) if daily_kcal > 0 else 0
+
+
+        protein_min_day = (daily_kcal * 0.10) / 4
+        protein_max_day = (daily_kcal * 0.20) / 4
+
+        fat_min_day = (daily_kcal * 0.25) / 9
+        fat_max_day = (daily_kcal * 0.40) / 9
+
+        sugar_max_day = (daily_kcal * 0.10) / 4
+
+
+        protein_min_breakfast = round(protein_min_day * 0.20)
+        protein_max_breakfast = round(protein_max_day * 0.25)
+
+        fat_min_breakfast = round(fat_min_day * 0.20)
+        fat_max_breakfast = round(fat_max_day * 0.25)
+
+        sugar_max_breakfast = round(sugar_max_day * 0.25)
+
+        kcal_min_breakfast = round(daily_kcal * 0.20)
+        kcal_max_breakfast = round(daily_kcal * 0.25)
+
+
+        protein_percent_day = round((protein_g / protein_max_day) * 100) if protein_max_day > 0 else 0
+        fat_percent_day = round((fat_g / fat_max_day) * 100) if fat_max_day > 0 else 0
+        sugar_percent_day = round((sugar_g / sugar_max_day) * 100) if sugar_max_day > 0 else 0
+        
+
+        distance_to_run = 10000000 * kcal / estimate_weight(self.age)
+        dimension = "meter"
+        if distance_to_run > 1000:
+            distance_to_run = round(distance_to_run/1000,2)
+            dimension = "km"
+        if distance_to_run >10000:
+            distance_to_run = round(distance_to_run / 10000,2)
+            dimension = "mil"
+    
+
+        self.cards_layout.add_widget(
+            NutrientCard(
+                "Energi",
+                f"{kcal} kcal (mål {kcal_min_breakfast}-{kcal_max_breakfast} kcal)\n{percent}% av dagsintag ({round(daily_kcal)})\n Du kan springa {distance_to_run} {dimension} ",
+                (0.9, 0.6, 0.1, 1),
+                image_path="../images/Energi.png"
+            )
+        )
+
+
+        self.cards_layout.add_widget(
+            NutrientCard(
+                "Socker",
+                f"{sugar_g} g (max {sugar_max_breakfast} g)\n{sugar_g} g / {round(sugar_max_day)} g",
+                (0.9, 0.3, 0.4, 1),
+                image_path="../images/Socker.png"
+            )
+        )
+
+
+
+
+
+
 
         
 
-        self.cards_layout.add_widget(NutrientCard("Energi", f"{round(res[0])} kcal", (0.9, 0.6, 0.1, 1)))
+        self.cards_layout.add_widget(
+            NutrientCard(
+                "Fett",
+                f"{fat_g} g (mål {fat_min_breakfast}-{fat_max_breakfast} g)\n{fat_percent_day}% av dagsintag ({round(fat_min_day)}-{round(fat_max_day)} g)",
+                (0.8, 0.5, 0.2, 1),
+                image_path="../images/Fett.png"
+            )
+        )
 
+        self.cards_layout.add_widget(
+            NutrientCard(
+                "Protein",
+                f"{protein_g} g (mål {protein_min_breakfast}-{protein_max_breakfast} g)\n{fat_percent_day}% av dagsintag ({round(protein_min_day)}-{round(protein_max_day)} g)",
+                (0.8, 0.5, 0.2, 1),
+                image_path="../images/Fett.png"
+            )
+        )
 
-
-
-
-
-        self.cards_layout.add_widget(NutrientCard("Socker", f"{round(res[3], 1)} g", (0.9, 0.3, 0.4, 1)))
-        self.cards_layout.add_widget(NutrientCard("Fett", f"{round(res[1], 1)} g", (0.8, 0.5, 0.2, 1)))
-        self.cards_layout.add_widget(NutrientCard("Protein", f"{round(res[2], 1)} g", (0.2, 0.6, 0.3, 1)))
         Clock.schedule_once(self.set_food_focus, 0.5)
 
     def clear_cards(self):
@@ -219,3 +359,24 @@ class FoodApp(App):
 
 if __name__ == "__main__":
     FoodApp().run()
+
+
+
+
+
+
+
+
+
+
+   
+
+
+
+
+
+
+
+
+      
+
