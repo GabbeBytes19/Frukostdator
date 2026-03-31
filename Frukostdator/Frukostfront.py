@@ -11,7 +11,8 @@ from kivy.graphics import Color, RoundedRectangle
 from kivy.uix.image import Image
 from kivy.clock import Clock
 import Frukostdator
-
+import destinations
+import math
 # Hämta data från Excel-logiken
 my_df = Frukostdator.get_excel_file()
 my_foods_dict = Frukostdator.get_food_and_info(my_df)
@@ -98,6 +99,8 @@ class FoodAppLayout(BoxLayout):
         self.gender = None
         self.age = 0
         self.selection_stage = "gender"
+        self.lst = {}
+        self.distance_to_run = 0
         
         # Timer-variabler
         self.timer_seconds = 0
@@ -183,7 +186,7 @@ class FoodAppLayout(BoxLayout):
                 Clock.schedule_once(lambda dt: setattr(self.age_input, 'focus', True), 0.1)
                 self.selection_stage = "age"
             else:
-                self.show_error("Ogiltigt val", "Skriv: man, kvinna, annan eller vill ej ange")
+                self.show_error("Ogiltigt val", "Ange: man, kvinna, annan eller vill ej ange")
                 self.gender_input.text = ""
                 Clock.schedule_once(self.set_gender_focus, 0.1)
 
@@ -224,6 +227,45 @@ class FoodAppLayout(BoxLayout):
         self.cards_layout.add_widget(NutrientCard(title, msg, (0.5, 0.1, 0.1, 1)))
 
   
+    def get_nearast_point(self):
+        
+        fenomenmagsinet = (58.3912, 15.5608)
+        phi1 = math.radians(fenomenmagsinet[0])
+        lambda1 = math.radians(fenomenmagsinet[1])
+        R = 6371.0
+ 
+
+        for key,value in destinations.linkoping_locations.items():
+            phi2 = value[0]
+            lambda2 = value[1]
+            delta_phi = math.radians(phi2 - phi1)
+            delta_lambda = math.radians(lambda2 - lambda1)
+
+            #Haversine beräkning
+            a = math.sin(delta_phi / 2)**2 + \
+                math.cos(phi1) * math.cos(phi2) * \
+                math.sin(delta_lambda / 2)**2
+            
+            c= 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+            result = c * R
+
+            self.lst[key] = result
+
+        return self.lst
+
+    def get_place(self):
+        self.get_nearast_point()
+        best_match = ""
+        smallest_diff= 10000000
+        for key,distance_to_place in self.lst.items():
+            diff = abs(self.distance_to_run - distance_to_place)
+            if diff < smallest_diff:
+                smallest_diff = diff
+                best_match = key
+        return best_match
+
+
 
     def show_food(self, instance):
         self.has_pressed_button = True # Registrera aktivitet
@@ -278,20 +320,25 @@ class FoodAppLayout(BoxLayout):
         sugar_percent_day = round((sugar_g / sugar_max_day) * 100) if sugar_max_day > 0 else 0
         
 
-        distance_to_run = 10000000 * kcal / estimate_weight(self.age)
+
+        self.distance_to_run = 10000000 * kcal / estimate_weight(self.age)
         dimension = "meter"
-        if distance_to_run > 1000:
-            distance_to_run = round(distance_to_run/1000,2)
+        if self.distance_to_run > 1000:
+            self.distance_to_run = round(self.distance_to_run/1000,2)
             dimension = "km"
-        if distance_to_run >10000:
-            distance_to_run = round(distance_to_run / 10000,2)
+        if self.distance_to_run >10000:
+            self.distance_to_run = round(self.distance_to_run / 10000,2)
             dimension = "mil"
-    
+
+     
+
+
+
 
         self.cards_layout.add_widget(
             NutrientCard(
                 "Energi",
-                f"{kcal} kcal (mål {kcal_min_breakfast}-{kcal_max_breakfast} kcal)\n{percent}% av dagsintag ({round(daily_kcal)})\n Du kan springa {distance_to_run} {dimension} ",
+                f"{kcal} kcal (mål {kcal_min_breakfast}-{kcal_max_breakfast} kcal)\n{percent}% av dagsintag ({round(daily_kcal)})\n Du kan springa {self.distance_to_run} {dimension}, detta är till {self.get_place()} ",
                 (0.9, 0.6, 0.1, 1),
                 image_path="../images/Energi.png"
             )
