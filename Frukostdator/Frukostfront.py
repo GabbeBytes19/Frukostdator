@@ -228,7 +228,7 @@ class FoodAppLayout(BoxLayout):
 
   
     def get_nearast_point(self):
-        
+        self.lst = {}
         fenomenmagsinet = (58.3912, 15.5608)
         phi1 = math.radians(fenomenmagsinet[0])
         lambda1 = math.radians(fenomenmagsinet[1])
@@ -236,19 +236,19 @@ class FoodAppLayout(BoxLayout):
  
 
         for key,value in destinations.linkoping_locations.items():
-            phi2 = value[0]
-            lambda2 = value[1]
-            delta_phi = math.radians(phi2 - phi1)
-            delta_lambda = math.radians(lambda2 - lambda1)
+            phi2 = math.radians(value[0])
+            lambda2 = math.radians(value[1])
 
-            #Haversine beräkning
+            delta_phi = phi2 - phi1
+            delta_lambda = lambda2 - lambda1
+
             a = math.sin(delta_phi / 2)**2 + \
                 math.cos(phi1) * math.cos(phi2) * \
                 math.sin(delta_lambda / 2)**2
             
-            c= 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-            result = c * R
+            result = R * c
 
             self.lst[key] = result
 
@@ -259,7 +259,7 @@ class FoodAppLayout(BoxLayout):
         best_match = ""
         smallest_diff= 10000000
         for key,distance_to_place in self.lst.items():
-            diff = abs(self.distance_to_run - distance_to_place)
+            diff = abs(self.distance_in_km - distance_to_place)
             if diff < smallest_diff:
                 smallest_diff = diff
                 best_match = key
@@ -280,7 +280,6 @@ class FoodAppLayout(BoxLayout):
 
         
 
-        age = int(self.age)
 
         self.clear_cards()
 
@@ -317,18 +316,20 @@ class FoodAppLayout(BoxLayout):
 
         protein_percent_day = round((protein_g / protein_max_day) * 100) if protein_max_day > 0 else 0
         fat_percent_day = round((fat_g / fat_max_day) * 100) if fat_max_day > 0 else 0
-        sugar_percent_day = round((sugar_g / sugar_max_day) * 100) if sugar_max_day > 0 else 0
         
 
 
-        self.distance_to_run = 10000000 * kcal / estimate_weight(self.age)
+        self.distance_to_run = 1000 * kcal / estimate_weight(self.age)
         dimension = "meter"
-        if self.distance_to_run > 1000:
-            self.distance_to_run = round(self.distance_to_run/1000,2)
-            dimension = "km"
+        self.distance_in_km = self.distance_to_run / 1000
+
         if self.distance_to_run >10000:
             self.distance_to_run = round(self.distance_to_run / 10000,2)
             dimension = "mil"
+        elif self.distance_to_run > 1000:
+            self.distance_to_run = round(self.distance_to_run/1000,2)
+            dimension = "km"
+        
 
      
 
@@ -374,9 +375,9 @@ class FoodAppLayout(BoxLayout):
         self.cards_layout.add_widget(
             NutrientCard(
                 "Protein",
-                f"{protein_g} g (mål {protein_min_breakfast}-{protein_max_breakfast} g)\n{fat_percent_day}% av dagsintag ({round(protein_min_day)}-{round(protein_max_day)} g)",
-                (0.8, 0.5, 0.2, 1),
-                image_path="../images/Fett.png"
+                f"{protein_g} g (mål {protein_min_breakfast}-{protein_max_breakfast} g)\n{protein_percent_day}% av dagsintag ({round(protein_min_day)}-{round(protein_max_day)} g)",
+                (0.2, 0.6, 0.3, 1),
+                image_path="../images/Protein.png"
             )
         )
 
@@ -406,24 +407,3 @@ class FoodApp(App):
 
 if __name__ == "__main__":
     FoodApp().run()
-
-
-
-
-
-
-
-
-
-
-   
-
-
-
-
-
-
-
-
-      
-
