@@ -321,7 +321,7 @@ class FoodAppLayout(BoxLayout):
         
 
 
-        self.distance_to_run = 10000000 * kcal / estimate_weight(self.age)
+        self.distance_to_run =  kcal / estimate_weight(self.age)
         dimension = "meter"
         if self.distance_to_run > 1000:
             self.distance_to_run = round(self.distance_to_run/1000,2)
