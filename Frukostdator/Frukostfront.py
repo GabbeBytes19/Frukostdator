@@ -8,7 +8,8 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.uix.progressbar import ProgressBar
 from kivy.animation import Animation
 from kivy.core.window import Window
-from kivy.graphics import Color, RoundedRectangle
+from kivy.graphics import Color, RoundedRectangle, Ellipse, Rectangle, Line
+from kivy.core.text import Label as CoreLabel
 from kivy.uix.image import Image
 from kivy.clock import Clock
 import Frukostdator
@@ -104,6 +105,180 @@ class NutrientCard(BoxLayout):
     def update_bg(self, *args):
         self.bg.pos = self.pos
         self.bg.size = self.size
+
+class _SugarCubesDisplay(Widget):
+    """Draws a grid of sugar-cube squares. Green = within daily max, red = over."""
+    def __init__(self, actual_cubes, daily_max_cubes, **kwargs):
+        kwargs.setdefault('size_hint_y', None)
+        kwargs.setdefault('height', 260)
+        super().__init__(**kwargs)
+        self.actual = max(actual_cubes, 0)
+        self.daily_max = max(daily_max_cubes, 1)
+        self.bind(pos=self._redraw, size=self._redraw)
+
+    def _redraw(self, *args):
+        self.canvas.clear()
+        cube_sz = 32
+        gap = 5
+        per_row = max(1, int((self.width - gap) / (cube_sz + gap)))
+        total = max(self.actual, self.daily_max)
+
+        with self.canvas:
+            for i in range(total):
+                col = i % per_row
+                row = i // per_row
+                x = self.x + gap + col * (cube_sz + gap)
+                y = self.y + self.height - gap - (row + 1) * (cube_sz + gap)
+                if y < self.y:
+                    break
+                if i < self.actual and i < self.daily_max:
+                    Color(0.15, 0.75, 0.25, 1)   # green: consumed, within limit
+                elif i < self.actual:
+                    Color(0.85, 0.15, 0.1, 1)    # red: consumed but over limit
+                else:
+                    Color(0.22, 0.22, 0.26, 1)   # dark grey: not consumed
+                RoundedRectangle(pos=(x, y), size=(cube_sz, cube_sz), radius=[5])
+
+            # Vertical line after the daily_max-th cube
+            max_col = self.daily_max % per_row
+            max_row = self.daily_max // per_row
+            line_x = self.x + gap + max_col * (cube_sz + gap) - gap // 2 - 1
+            line_y_top = self.y + self.height - gap - max_row * (cube_sz + gap) + gap
+            line_y_bot = self.y + 4
+            Color(1, 1, 1, 0.85)
+            Line(points=[line_x, line_y_top, line_x, line_y_bot], width=2.5)
+
+            # "Max" label drawn as texture
+            core_lbl = CoreLabel(text="Max", font_size=14, bold=True)
+            core_lbl.refresh()
+            tex = core_lbl.texture
+            Color(1, 1, 1, 0.85)
+            Rectangle(texture=tex,
+                      pos=(line_x - tex.width // 2, self.y + self.height - tex.height - 2),
+                      size=tex.size)
+
+
+class SugarCubesCard(BoxLayout):
+    def __init__(self, sugar_g, sugar_max_breakfast_g, sugar_max_day_g, **kwargs):
+        super().__init__(orientation="vertical", padding=[15, 12, 15, 12], spacing=5,
+                         size_hint_y=None, height=500, **kwargs)
+
+        actual_cubes = round(sugar_g / 4)
+        max_breakfast_cubes = max(round(sugar_max_breakfast_g / 4), 1)
+        daily_max_cubes = max(round(sugar_max_day_g / 4), 1)
+
+        if sugar_g <= sugar_max_breakfast_g * 0.5:
+            status, card_color = "Jattebra!", (0.08, 0.45, 0.15, 1)
+        elif sugar_g <= sugar_max_breakfast_g:
+            status, card_color = "Bra!", (0.1, 0.38, 0.12, 1)
+        elif sugar_g <= sugar_max_breakfast_g * 1.3:
+            status, card_color = "~ Okej", (0.5, 0.32, 0.04, 1)
+        else:
+            status, card_color = "! For mycket", (0.5, 0.08, 0.08, 1)
+
+        with self.canvas.before:
+            Color(*card_color)
+            self.bg = RoundedRectangle(radius=[20])
+        self.bind(pos=self._upd, size=self._upd)
+
+        self.add_widget(Label(text="Socker", font_size=34, bold=True, size_hint_y=None, height=48))
+        self.add_widget(Label(text=status, font_size=24, bold=True, size_hint_y=None, height=36))
+
+        sub = Label(
+            text=f"{actual_cubes} sockerbitar (max {max_breakfast_cubes}/frukost  |  {daily_max_cubes}/dag)",
+            font_size=15, halign="center", size_hint_y=None, height=30
+        )
+        sub.bind(size=lambda *a: setattr(sub, 'text_size', sub.size))
+        self.add_widget(sub)
+
+        self.add_widget(_SugarCubesDisplay(actual_cubes=actual_cubes, daily_max_cubes=daily_max_cubes))
+
+        self.opacity = 0
+        Animation(opacity=1, duration=0.4).start(self)
+
+    def _upd(self, *args):
+        self.bg.pos = self.pos
+        self.bg.size = self.size
+
+
+class _CircleDisplay(Widget):
+    """Draws a solid colored circle with centered text."""
+    def __init__(self, color, line1, line2, **kwargs):
+        kwargs.setdefault('size_hint_y', None)
+        kwargs.setdefault('height', 260)
+        super().__init__(**kwargs)
+        self.circle_color = color
+        self.line1 = line1
+        self.line2 = line2
+        self.bind(pos=self._redraw, size=self._redraw)
+
+    def _redraw(self, *args):
+        self.canvas.clear()
+        r = min(self.width, self.height) / 2 - 12
+        cx = self.x + self.width / 2
+        cy = self.y + self.height / 2
+
+        with self.canvas:
+            Color(0.1, 0.1, 0.12, 1)
+            Ellipse(pos=(cx - r, cy - r), size=(r * 2, r * 2))
+            Color(*self.circle_color)
+            ir = r - 10
+            Ellipse(pos=(cx - ir, cy - ir), size=(ir * 2, ir * 2))
+
+            # Line 1 (large value)
+            lbl1 = CoreLabel(text=self.line1, font_size=26, bold=True, halign='center')
+            lbl1.refresh()
+            t1 = lbl1.texture
+            Color(1, 1, 1, 1)
+            Rectangle(texture=t1, pos=(cx - t1.width / 2, cy + 4), size=t1.size)
+
+            # Line 2 (small label)
+            lbl2 = CoreLabel(text=self.line2, font_size=16, halign='center')
+            lbl2.refresh()
+            t2 = lbl2.texture
+            Rectangle(texture=t2, pos=(cx - t2.width / 2, cy - t2.height - 2), size=t2.size)
+
+
+class CircleNutrientCard(BoxLayout):
+    def __init__(self, title, value_g, min_g, max_g, unit="g", fun_text="", **kwargs):
+        super().__init__(orientation="vertical", padding=[15, 12, 15, 12], spacing=5,
+                         size_hint_y=None, height=500, **kwargs)
+
+        if value_g < min_g * 0.5:
+            status, card_color = "For lite!", (0.5, 0.08, 0.08, 1)
+        elif value_g < min_g:
+            status, card_color = "~ Lite lite", (0.5, 0.32, 0.04, 1)
+        elif value_g <= max_g:
+            status, card_color = "Bra!", (0.08, 0.42, 0.14, 1)
+        elif value_g <= max_g * 1.4:
+            status, card_color = "~ Lite mycket", (0.5, 0.32, 0.04, 1)
+        else:
+            status, card_color = "! For mycket", (0.5, 0.08, 0.08, 1)
+
+        with self.canvas.before:
+            Color(*card_color)
+            self.bg = RoundedRectangle(radius=[20])
+        self.bind(pos=self._upd, size=self._upd)
+
+        self.add_widget(Label(text=title, font_size=34, bold=True, size_hint_y=None, height=48))
+        self.add_widget(Label(text=status, font_size=24, bold=True, size_hint_y=None, height=36))
+
+        circle_line1 = f"{value_g}{unit}"
+        circle_line2 = f"mal {min_g}-{max_g}{unit}"
+        self.add_widget(_CircleDisplay(color=card_color, line1=circle_line1, line2=circle_line2))
+
+        if fun_text:
+            sub = Label(text=fun_text, font_size=15, halign="center", size_hint_y=None, height=40)
+            sub.bind(size=lambda *a: setattr(sub, 'text_size', sub.size))
+            self.add_widget(sub)
+
+        self.opacity = 0
+        Animation(opacity=1, duration=0.4).start(self)
+
+    def _upd(self, *args):
+        self.bg.pos = self.pos
+        self.bg.size = self.size
+
 
 class FoodAppLayout(BoxLayout):
     def __init__(self, **kwargs):
@@ -392,17 +567,11 @@ class FoodAppLayout(BoxLayout):
         )
 
 
-        sugar_cubes = round(sugar_g / 4, 1)
-        sugar_status, sugar_color, sugar_prog = self._get_status(sugar_g, 0, sugar_max_breakfast, invert=True)
         self.cards_layout.add_widget(
-            NutrientCard(
-                "Socker",
-                f"{sugar_g} g socker\nMax: {sugar_max_breakfast} g\n= {sugar_cubes} sockerbitar",
-                sugar_color,
-                status_text=sugar_status,
-                progress_val=sugar_prog,
-                show_progress=True,
-                image_path="../images/Socker.png"
+            SugarCubesCard(
+                sugar_g=sugar_g,
+                sugar_max_breakfast_g=sugar_max_breakfast,
+                sugar_max_day_g=sugar_max_day
             )
         )
 
@@ -415,30 +584,24 @@ class FoodAppLayout(BoxLayout):
         
 
         tablespoons = round(fat_g / 14, 1)
-        fat_status, fat_color, fat_prog = self._get_status(fat_g, fat_min_breakfast, fat_max_breakfast)
         self.cards_layout.add_widget(
-            NutrientCard(
-                "Fett",
-                f"{fat_g} g fett\nMal: {fat_min_breakfast}-{fat_max_breakfast} g\n= {tablespoons} matskedar",
-                fat_color,
-                status_text=fat_status,
-                progress_val=fat_prog,
-                show_progress=True,
-                image_path="../images/Fett.png"
+            CircleNutrientCard(
+                title="Fett",
+                value_g=fat_g,
+                min_g=fat_min_breakfast,
+                max_g=fat_max_breakfast,
+                fun_text=f"= {tablespoons} matskedar"
             )
         )
 
         eggs = round(protein_g / 6, 1)
-        protein_status, protein_color, protein_prog = self._get_status(protein_g, protein_min_breakfast, protein_max_breakfast)
         self.cards_layout.add_widget(
-            NutrientCard(
-                "Protein",
-                f"{protein_g} g protein\nMal: {protein_min_breakfast}-{protein_max_breakfast} g\n= {eggs} agg (bygger muskler!)",
-                protein_color,
-                status_text=protein_status,
-                progress_val=protein_prog,
-                show_progress=True,
-                image_path="../images/Protein.png"
+            CircleNutrientCard(
+                title="Protein",
+                value_g=protein_g,
+                min_g=protein_min_breakfast,
+                max_g=protein_max_breakfast,
+                fun_text=f"= {eggs} agg  (bygger muskler!)"
             )
         )
 
