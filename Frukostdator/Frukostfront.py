@@ -5,6 +5,7 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.gridlayout import GridLayout
+from kivy.uix.progressbar import ProgressBar
 from kivy.animation import Animation
 from kivy.core.window import Window
 from kivy.graphics import Color, RoundedRectangle
@@ -74,17 +75,29 @@ def get_daily_calories(age, gender):
 
 
 class NutrientCard(BoxLayout):
-    def __init__(self, title, value_text, color, image_path=None, **kwargs):
-        super().__init__(orientation="vertical", padding=15, size_hint_y=None, height=450, **kwargs)
+    def __init__(self, title, value_text, color, status_text="", progress_val=0, show_progress=False, image_path=None, **kwargs):
+        super().__init__(orientation="vertical", padding=[15, 12, 15, 12], spacing=6, size_hint_y=None, height=500, **kwargs)
         with self.canvas.before:
             Color(*color)
             self.bg = RoundedRectangle(radius=[20])
         self.bind(pos=self.update_bg, size=self.update_bg)
-        self.add_widget(Label(text=title, font_size=32, bold=True))
-        self.add_widget(Label(text=value_text, font_size=20, halign="center"))
+
+        self.add_widget(Label(text=title, font_size=34, bold=True, size_hint_y=None, height=48))
+
+        if status_text:
+            self.add_widget(Label(text=status_text, font_size=26, bold=True, size_hint_y=None, height=40))
+
+        if show_progress:
+            self.add_widget(ProgressBar(max=100, value=min(progress_val, 100), size_hint=(1, None), height=26))
+
+        lbl = Label(text=value_text, font_size=18, halign="center", valign="top", size_hint_y=None, height=220)
+        lbl.bind(size=lambda *a: setattr(lbl, 'text_size', lbl.size))
+        self.add_widget(lbl)
+
         if image_path:
-            try: self.add_widget(Image(source=image_path, size_hint=(1, 0.5)))
+            try: self.add_widget(Image(source=image_path, size_hint=(1, None), height=80))
             except: pass
+
         self.opacity = 0
         Animation(opacity=1, duration=0.4).start(self)
 
@@ -270,6 +283,32 @@ class FoodAppLayout(BoxLayout):
 
 
 
+    def _get_status(self, value, min_val, max_val, invert=False):
+        """Returns (status_text, card_color, progress_percent).
+        invert=True means lower is better (e.g. sugar)."""
+        progress = min(round((value / max_val) * 100), 100) if max_val > 0 else 0
+        if invert:
+            if value <= max_val * 0.5:
+                return "Jattebra!", (0.1, 0.55, 0.2, 1), progress
+            elif value <= max_val:
+                return "Bra!", (0.15, 0.5, 0.15, 1), progress
+            elif value <= max_val * 1.3:
+                return "~ Okej", (0.65, 0.4, 0.05, 1), progress
+            else:
+                return "! For mycket", (0.65, 0.1, 0.1, 1), progress
+        else:
+            progress = min(round((value / max_val) * 100), 100) if max_val > 0 else 0
+            if value < min_val * 0.5:
+                return "For lite!", (0.55, 0.35, 0.05, 1), progress
+            elif value < min_val:
+                return "~ Lite lite", (0.65, 0.4, 0.05, 1), progress
+            elif value <= max_val:
+                return "Bra!", (0.1, 0.55, 0.2, 1), progress
+            elif value <= max_val * 1.3:
+                return "~ Lite mycket", (0.65, 0.4, 0.05, 1), progress
+            else:
+                return "! For mycket", (0.65, 0.1, 0.1, 1), progress
+
     def show_food(self, instance):
         self.has_pressed_button = True # Registrera aktivitet
         self.food_input.text = ""
@@ -338,21 +377,31 @@ class FoodAppLayout(BoxLayout):
 
 
 
+        energy_status, energy_color, energy_prog = self._get_status(kcal, kcal_min_breakfast, kcal_max_breakfast)
+        nearest = self.get_place()
         self.cards_layout.add_widget(
             NutrientCard(
                 "Energi",
-                f"{kcal} kcal (mål {kcal_min_breakfast}-{kcal_max_breakfast} kcal)\n{percent}% av dagsintag ({round(daily_kcal)})\n Du kan springa {self.distance_to_run} {dimension}, detta är till {self.get_place()} ",
-                (0.9, 0.6, 0.1, 1),
+                f"{kcal} kcal\nMal: {kcal_min_breakfast}-{kcal_max_breakfast} kcal\n{percent}% av dagsintaget\nDu kan springa {self.distance_to_run} {dimension}\n(till {nearest}!)",
+                energy_color,
+                status_text=energy_status,
+                progress_val=energy_prog,
+                show_progress=True,
                 image_path="../images/Energi.png"
             )
         )
 
 
+        sugar_cubes = round(sugar_g / 4, 1)
+        sugar_status, sugar_color, sugar_prog = self._get_status(sugar_g, 0, sugar_max_breakfast, invert=True)
         self.cards_layout.add_widget(
             NutrientCard(
                 "Socker",
-                f"{sugar_g} g (max {sugar_max_breakfast} g)\n{sugar_g} g / {round(sugar_max_day)} g",
-                (0.9, 0.3, 0.4, 1),
+                f"{sugar_g} g socker\nMax: {sugar_max_breakfast} g\n= {sugar_cubes} sockerbitar",
+                sugar_color,
+                status_text=sugar_status,
+                progress_val=sugar_prog,
+                show_progress=True,
                 image_path="../images/Socker.png"
             )
         )
@@ -365,21 +414,31 @@ class FoodAppLayout(BoxLayout):
 
         
 
+        tablespoons = round(fat_g / 14, 1)
+        fat_status, fat_color, fat_prog = self._get_status(fat_g, fat_min_breakfast, fat_max_breakfast)
         self.cards_layout.add_widget(
             NutrientCard(
                 "Fett",
-                f"{fat_g} g (mål {fat_min_breakfast}-{fat_max_breakfast} g)\n{fat_percent_day}% av dagsintag ({round(fat_min_day)}-{round(fat_max_day)} g)",
-                (0.8, 0.5, 0.2, 1),
+                f"{fat_g} g fett\nMal: {fat_min_breakfast}-{fat_max_breakfast} g\n= {tablespoons} matskedar",
+                fat_color,
+                status_text=fat_status,
+                progress_val=fat_prog,
+                show_progress=True,
                 image_path="../images/Fett.png"
             )
         )
 
+        eggs = round(protein_g / 6, 1)
+        protein_status, protein_color, protein_prog = self._get_status(protein_g, protein_min_breakfast, protein_max_breakfast)
         self.cards_layout.add_widget(
             NutrientCard(
                 "Protein",
-                f"{protein_g} g (mål {protein_min_breakfast}-{protein_max_breakfast} g)\n{fat_percent_day}% av dagsintag ({round(protein_min_day)}-{round(protein_max_day)} g)",
-                (0.8, 0.5, 0.2, 1),
-                image_path="../images/Fett.png"
+                f"{protein_g} g protein\nMal: {protein_min_breakfast}-{protein_max_breakfast} g\n= {eggs} agg (bygger muskler!)",
+                protein_color,
+                status_text=protein_status,
+                progress_val=protein_prog,
+                show_progress=True,
+                image_path="../images/Protein.png"
             )
         )
 
