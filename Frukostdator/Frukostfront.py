@@ -123,11 +123,14 @@ class FoodAppLayout(BoxLayout):
 
         # Knappar
         btn_layout = BoxLayout(size_hint=(1, 0.08), spacing=10)
-        self.finish_button = Button(text="Finish (Visa Resultat)", background_color=(0.2, 0.6, 0.2, 1))
+        self.finish_button = Button(text="Beräkna", background_color=(0.2, 0.6, 0.2, 1))
         self.finish_button.bind(on_press=self.show_food)
+        self.new_breakfast_button = Button(text="Ny frukost", background_color=(0.2, 0.4, 0.8, 1))
+        self.new_breakfast_button.bind(on_press=self.new_breakfast)
         self.reset_button = Button(text="Reset (Nollställ)", background_color=(0.6, 0.2, 0.2, 1))
         self.reset_button.bind(on_press=self.reset_foods)
         btn_layout.add_widget(self.finish_button)
+        btn_layout.add_widget(self.new_breakfast_button)
         btn_layout.add_widget(self.reset_button)
         self.add_widget(btn_layout)
 
@@ -384,6 +387,16 @@ class FoodAppLayout(BoxLayout):
 
     def clear_cards(self):
         self.cards_layout.clear_widgets()
+
+    def new_breakfast(self, instance):
+        self.food_list = []
+        self.clear_cards()
+        self.food_input.text = ""
+        self.food_input.disabled = False
+        self.selection_stage = "food"
+        self.timer_seconds = 0
+        self.has_pressed_button = True
+        Clock.schedule_once(self.set_food_focus, 0.1)
 
     def reset_foods(self, instance):
         self.food_list = []
