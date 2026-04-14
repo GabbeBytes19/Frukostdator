@@ -78,32 +78,54 @@ def get_daily_calories(age, gender):
 
 class NutrientCard(BoxLayout):
     def __init__(self, title, value_text, color, status_text="", progress_val=0, show_progress=False, image_path=None, **kwargs):
-        super().__init__(orientation="vertical", padding=[15, 12, 15, 12], spacing=6, size_hint_y=None, height=500, **kwargs)
+        super().__init__(orientation="vertical", padding=[18, 14, 18, 14], spacing=0, size_hint_y=None, height=500, **kwargs)
+
+        r, g, b, a = color
+        shadow = (r * 0.6, g * 0.6, b * 0.6, 1)
         with self.canvas.before:
+            Color(*shadow)
+            self._shadow = RoundedRectangle(radius=[22])
             Color(*color)
-            self.bg = RoundedRectangle(radius=[20])
+            self.bg = RoundedRectangle(radius=[22])
         self.bind(pos=self.update_bg, size=self.update_bg)
 
-        self.add_widget(Label(text=title, font_size=34, bold=True, size_hint_y=None, height=48))
+        title_lbl = Label(text=title, font_size=32, bold=True, size_hint_y=None, height=46)
+        self.add_widget(title_lbl)
+
+        # Thin divider
+        div = Widget(size_hint_y=None, height=2)
+        with div.canvas:
+            Color(1, 1, 1, 0.15)
+            self._div_rect = Rectangle()
+        div.bind(pos=lambda w, p: setattr(self._div_rect, 'pos', p),
+                 size=lambda w, s: setattr(self._div_rect, 'size', s))
+        self.add_widget(div)
 
         if status_text:
-            self.add_widget(Label(text=status_text, font_size=26, bold=True, size_hint_y=None, height=40))
+            self.add_widget(Label(text=status_text, font_size=24, bold=True,
+                                  size_hint_y=None, height=38))
 
         if show_progress:
-            self.add_widget(ProgressBar(max=100, value=min(progress_val, 100), size_hint=(1, None), height=26))
+            self.add_widget(Widget(size_hint_y=None, height=4))
+            self.add_widget(ProgressBar(max=100, value=min(progress_val, 100),
+                                        size_hint=(1, None), height=22))
+            self.add_widget(Widget(size_hint_y=None, height=4))
 
-        lbl = Label(text=value_text, font_size=18, halign="center", valign="top", size_hint_y=None, height=220)
+        lbl = Label(text=value_text, font_size=17, halign="center", valign="top",
+                    size_hint_y=None, height=200)
         lbl.bind(size=lambda *a: setattr(lbl, 'text_size', lbl.size))
         self.add_widget(lbl)
 
         if image_path:
-            try: self.add_widget(Image(source=image_path, size_hint=(1, None), height=80))
+            try: self.add_widget(Image(source=image_path, size_hint=(1, None), height=75))
             except: pass
 
         self.opacity = 0
-        Animation(opacity=1, duration=0.4).start(self)
+        Animation(opacity=1, duration=0.35).start(self)
 
     def update_bg(self, *args):
+        self._shadow.pos = (self.x + 4, self.y - 4)
+        self._shadow.size = self.size
         self.bg.pos = self.pos
         self.bg.size = self.size
 
@@ -119,8 +141,9 @@ class _SugarCubesDisplay(Widget):
 
     def _redraw(self, *args):
         self.canvas.clear()
-        cube_sz = 32
-        gap = 5
+        cube_sz = 36
+        gap = 7
+        d = 5         # 3-D lift depth
         per_row = max(1, int((self.width - gap) / (cube_sz + gap)))
         total = max(self.actual, self.daily_max)
 
@@ -132,30 +155,50 @@ class _SugarCubesDisplay(Widget):
                 y = self.y + self.height - gap - (row + 1) * (cube_sz + gap)
                 if y < self.y:
                     break
+
                 if i < self.actual and i < self.daily_max:
-                    Color(0.15, 0.75, 0.25, 1)   # green: consumed, within limit
+                    main_c   = (0.22, 0.88, 0.40, 1)
+                    shadow_c = (0.09, 0.50, 0.20, 1)
+                    sheen    = 0.28
                 elif i < self.actual:
-                    Color(0.85, 0.15, 0.1, 1)    # red: consumed but over limit
+                    main_c   = (0.92, 0.25, 0.22, 1)
+                    shadow_c = (0.58, 0.08, 0.08, 1)
+                    sheen    = 0.22
                 else:
-                    Color(0.22, 0.22, 0.26, 1)   # dark grey: not consumed
-                RoundedRectangle(pos=(x, y), size=(cube_sz, cube_sz), radius=[5])
+                    main_c   = (0.20, 0.20, 0.26, 1)
+                    shadow_c = (0.10, 0.10, 0.14, 1)
+                    sheen    = 0.05
 
-            # Vertical line after the daily_max-th cube
+                # Shadow base (full size, slightly lower)
+                Color(*shadow_c)
+                RoundedRectangle(pos=(x, y), size=(cube_sz, cube_sz - d), radius=[8])
+
+                # Raised face (lifted by d pixels)
+                Color(*main_c)
+                RoundedRectangle(pos=(x, y + d), size=(cube_sz, cube_sz - d), radius=[8])
+
+                # Sheen highlight (top-left gloss)
+                Color(1, 1, 1, sheen)
+                RoundedRectangle(pos=(x + 5, y + d + 5), size=(cube_sz - 16, 7), radius=[4])
+
+            # Dashed MAX line
             max_col = self.daily_max % per_row
-            max_row = self.daily_max // per_row
-            line_x = self.x + gap + max_col * (cube_sz + gap) - gap // 2 - 1
-            line_y_top = self.y + self.height - gap - max_row * (cube_sz + gap) + gap
-            line_y_bot = self.y + 4
-            Color(1, 1, 1, 0.85)
-            Line(points=[line_x, line_y_top, line_x, line_y_bot], width=2.5)
+            max_row_idx = self.daily_max // per_row
+            line_x = self.x + gap + max_col * (cube_sz + gap) - gap // 2
+            line_y_top = self.y + self.height - gap - max_row_idx * (cube_sz + gap) + gap * 2
+            line_y_bot = self.y + 6
+            Color(1, 1, 1, 0.55)
+            Line(points=[line_x, line_y_top, line_x, line_y_bot],
+                 width=2, dash_offset=5, dash_length=7)
 
-            # "Max" label drawn as texture
-            core_lbl = CoreLabel(text="Max", font_size=14, bold=True)
+            # MAX label
+            core_lbl = CoreLabel(text="MAX", font_size=11, bold=True)
             core_lbl.refresh()
             tex = core_lbl.texture
-            Color(1, 1, 1, 0.85)
+            Color(1, 1, 1, 0.65)
             Rectangle(texture=tex,
-                      pos=(line_x - tex.width // 2, self.y + self.height - tex.height - 2),
+                      pos=(line_x - tex.width // 2,
+                           self.y + self.height - tex.height - 3),
                       size=tex.size)
 
 
@@ -177,17 +220,31 @@ class SugarCubesCard(BoxLayout):
         else:
             status, card_color = "! For mycket", (0.5, 0.08, 0.08, 1)
 
+        r, g, b, a = card_color
+        shadow = (r * 0.6, g * 0.6, b * 0.6, 1)
         with self.canvas.before:
+            Color(*shadow)
+            self._shadow = RoundedRectangle(radius=[22])
             Color(*card_color)
-            self.bg = RoundedRectangle(radius=[20])
+            self.bg = RoundedRectangle(radius=[22])
         self.bind(pos=self._upd, size=self._upd)
 
-        self.add_widget(Label(text="Socker", font_size=34, bold=True, size_hint_y=None, height=48))
-        self.add_widget(Label(text=status, font_size=24, bold=True, size_hint_y=None, height=36))
+        self.add_widget(Label(text="Socker", font_size=32, bold=True, size_hint_y=None, height=46))
+
+        # Divider
+        div = Widget(size_hint_y=None, height=2)
+        with div.canvas:
+            Color(1, 1, 1, 0.15)
+            self._div = Rectangle()
+        div.bind(pos=lambda w, p: setattr(self._div, 'pos', p),
+                 size=lambda w, s: setattr(self._div, 'size', s))
+        self.add_widget(div)
+
+        self.add_widget(Label(text=status, font_size=22, bold=True, size_hint_y=None, height=34))
 
         sub = Label(
-            text=f"{actual_cubes} sockerbitar (max {max_breakfast_cubes}/frukost  |  {daily_max_cubes}/dag)",
-            font_size=15, halign="center", size_hint_y=None, height=30
+            text=f"{actual_cubes} sockerbitar  |  max {max_breakfast_cubes}/frukost  |  {daily_max_cubes}/dag",
+            font_size=13, halign="center", size_hint_y=None, height=26
         )
         sub.bind(size=lambda *a: setattr(sub, 'text_size', sub.size))
         self.add_widget(sub)
@@ -195,49 +252,77 @@ class SugarCubesCard(BoxLayout):
         self.add_widget(_SugarCubesDisplay(actual_cubes=actual_cubes, daily_max_cubes=daily_max_cubes))
 
         self.opacity = 0
-        Animation(opacity=1, duration=0.4).start(self)
+        Animation(opacity=1, duration=0.35).start(self)
 
     def _upd(self, *args):
+        self._shadow.pos = (self.x + 4, self.y - 4)
+        self._shadow.size = self.size
         self.bg.pos = self.pos
         self.bg.size = self.size
 
 
 class _CircleDisplay(Widget):
-    """Draws a solid colored circle with centered text."""
-    def __init__(self, color, line1, line2, **kwargs):
+    """Progress-arc circle with centered value text."""
+    def __init__(self, color, line1, line2, progress=0, **kwargs):
         kwargs.setdefault('size_hint_y', None)
-        kwargs.setdefault('height', 260)
+        kwargs.setdefault('height', 240)
         super().__init__(**kwargs)
         self.circle_color = color
         self.line1 = line1
         self.line2 = line2
+        self.progress = max(0, min(progress, 100))
         self.bind(pos=self._redraw, size=self._redraw)
 
     def _redraw(self, *args):
         self.canvas.clear()
-        r = min(self.width, self.height) / 2 - 12
+        arc_r  = min(self.width, self.height) / 2 - 16
+        fill_r = arc_r - 18
         cx = self.x + self.width / 2
         cy = self.y + self.height / 2
+        r, g, b, _ = self.circle_color
 
         with self.canvas:
-            Color(0.1, 0.1, 0.12, 1)
-            Ellipse(pos=(cx - r, cy - r), size=(r * 2, r * 2))
-            Color(*self.circle_color)
-            ir = r - 10
-            Ellipse(pos=(cx - ir, cy - ir), size=(ir * 2, ir * 2))
+            # Track ring (dark background)
+            Color(0.07, 0.07, 0.10, 1)
+            Line(ellipse=(cx - arc_r, cy - arc_r, arc_r * 2, arc_r * 2), width=13)
 
-            # Line 1 (large value)
-            lbl1 = CoreLabel(text=self.line1, font_size=26, bold=True, halign='center')
+            # Coloured progress arc (clockwise from top = 90°)
+            if self.progress > 0:
+                Color(r, g, b, 1)
+                deg = 360 * self.progress / 100
+                Line(ellipse=(cx - arc_r, cy - arc_r, arc_r * 2, arc_r * 2,
+                              90 - deg, 90),
+                     width=13)
+
+            # Inner filled circle
+            Color(0.09, 0.09, 0.12, 1)
+            Ellipse(pos=(cx - fill_r, cy - fill_r), size=(fill_r * 2, fill_r * 2))
+
+            # Subtle colored tint inside
+            Color(r, g, b, 0.18)
+            tint_r = fill_r - 6
+            Ellipse(pos=(cx - tint_r, cy - tint_r), size=(tint_r * 2, tint_r * 2))
+
+            # Value (large)
+            lbl1 = CoreLabel(text=self.line1, font_size=24, bold=True, halign='center')
             lbl1.refresh()
             t1 = lbl1.texture
             Color(1, 1, 1, 1)
-            Rectangle(texture=t1, pos=(cx - t1.width / 2, cy + 4), size=t1.size)
+            Rectangle(texture=t1, pos=(cx - t1.width / 2, cy + 3), size=t1.size)
 
-            # Line 2 (small label)
-            lbl2 = CoreLabel(text=self.line2, font_size=16, halign='center')
+            # Range label (small)
+            lbl2 = CoreLabel(text=self.line2, font_size=13, halign='center')
             lbl2.refresh()
             t2 = lbl2.texture
-            Rectangle(texture=t2, pos=(cx - t2.width / 2, cy - t2.height - 2), size=t2.size)
+            Color(0.75, 0.75, 0.75, 1)
+            Rectangle(texture=t2, pos=(cx - t2.width / 2, cy - t2.height - 5), size=t2.size)
+
+            # Percentage below the arc
+            pct = CoreLabel(text=f"{self.progress}%", font_size=12, bold=True)
+            pct.refresh()
+            tp = pct.texture
+            Color(r, g, b, 0.85)
+            Rectangle(texture=tp, pos=(cx - tp.width / 2, cy - arc_r - tp.height - 2), size=tp.size)
 
 
 class CircleNutrientCard(BoxLayout):
@@ -256,17 +341,32 @@ class CircleNutrientCard(BoxLayout):
         else:
             status, card_color = "! For mycket", (0.5, 0.08, 0.08, 1)
 
+        r2, g2, b2, _ = card_color
+        shadow2 = (r2 * 0.6, g2 * 0.6, b2 * 0.6, 1)
         with self.canvas.before:
+            Color(*shadow2)
+            self._shadow = RoundedRectangle(radius=[22])
             Color(*card_color)
-            self.bg = RoundedRectangle(radius=[20])
+            self.bg = RoundedRectangle(radius=[22])
         self.bind(pos=self._upd, size=self._upd)
 
-        self.add_widget(Label(text=title, font_size=34, bold=True, size_hint_y=None, height=48))
-        self.add_widget(Label(text=status, font_size=24, bold=True, size_hint_y=None, height=36))
+        self.add_widget(Label(text=title, font_size=32, bold=True, size_hint_y=None, height=46))
 
+        div2 = Widget(size_hint_y=None, height=2)
+        with div2.canvas:
+            Color(1, 1, 1, 0.15)
+            self._div = Rectangle()
+        div2.bind(pos=lambda w, p: setattr(self._div, 'pos', p),
+                  size=lambda w, s: setattr(self._div, 'size', s))
+        self.add_widget(div2)
+
+        self.add_widget(Label(text=status, font_size=22, bold=True, size_hint_y=None, height=34))
+
+        progress = min(round((value_g / max_g) * 100), 100) if max_g > 0 else 0
         circle_line1 = f"{value_g}{unit}"
         circle_line2 = f"mal {min_g}-{max_g}{unit}"
-        self.add_widget(_CircleDisplay(color=card_color, line1=circle_line1, line2=circle_line2))
+        self.add_widget(_CircleDisplay(color=card_color, line1=circle_line1,
+                                       line2=circle_line2, progress=progress))
 
         if fun_text:
             sub = Label(text=fun_text, font_size=15, halign="center", size_hint_y=None, height=40)
@@ -274,9 +374,11 @@ class CircleNutrientCard(BoxLayout):
             self.add_widget(sub)
 
         self.opacity = 0
-        Animation(opacity=1, duration=0.4).start(self)
+        Animation(opacity=1, duration=0.35).start(self)
 
     def _upd(self, *args):
+        self._shadow.pos = (self.x + 4, self.y - 4)
+        self._shadow.size = self.size
         self.bg.pos = self.pos
         self.bg.size = self.size
 
