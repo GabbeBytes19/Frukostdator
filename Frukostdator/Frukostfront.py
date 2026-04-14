@@ -281,6 +281,26 @@ class CircleNutrientCard(BoxLayout):
         self.bg.size = self.size
 
 
+class RunningMan(Image):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.frames = ["run_1.png", "run_2.png", "run_3.png", "run_4.png"]
+        self.frame_index = 0
+        self.anim_event = None
+        self.source = self.frames[0]
+
+    def start(self, speed):
+        self.anim_event = Clock.schedule_interval(self.next_frame, speed)
+
+    def next_frame(self, dt):
+        self.frame_index = (self.frame_index + 1) % len(self.frames)
+        self.source = self.frames[self.frame_index]
+
+    def stop(self):
+        if self.anim_event:
+            self.anim_event.cancel()
+
+
 class FoodAppLayout(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", padding=20, spacing=15, **kwargs)
@@ -324,7 +344,7 @@ class FoodAppLayout(BoxLayout):
         self.add_widget(btn_layout)
 
         self.scroll = ScrollView()
-        self.cards_layout = GridLayout(cols=4, spacing=15, size_hint_y=None)
+        self.cards_layout = GridLayout(cols=3, spacing=15, size_hint_y=None)
         self.cards_layout.bind(minimum_height=self.cards_layout.setter('height'))
         self.scroll.add_widget(self.cards_layout)
         self.add_widget(self.scroll)
@@ -340,14 +360,12 @@ class FoodAppLayout(BoxLayout):
         self.food_input.focus = True
 
     def update_timer(self, dt):
-        # Om något har hänt, nollställ klockan och vänta på nästa händelse
         if self.has_pressed_button:
             self.timer_seconds = 0
             self.has_pressed_button = False
         else:
             self.timer_seconds += 1
             
-        # Om 60 sekunder gått utan aktivitet
         if self.timer_seconds >= 60:
             print("Auto-reset pga inaktivitet")
             self.reset_foods(None)
@@ -356,7 +374,7 @@ class FoodAppLayout(BoxLayout):
         scanned = value.strip().lower()
         if not scanned: return
         
-        self.has_pressed_button = True # Registrera aktivitet
+        self.has_pressed_button = True
         
         if scanned == "reset":
             self.reset_foods(None)
@@ -367,7 +385,7 @@ class FoodAppLayout(BoxLayout):
 
     def process_input(self, instance):
         text = instance.text.strip().lower()
-        self.has_pressed_button = True # Registrera aktivitet
+        self.has_pressed_button = True
         
         if self.selection_stage == "gender":
             if text in ["man", "kvinna", "annan", "vill ej ange"]:
@@ -402,7 +420,7 @@ class FoodAppLayout(BoxLayout):
 
     def add_food(self):
         scanned_data = self.food_input.text.strip().lower()
-        self.has_pressed_button = True # Registrera aktivitet
+        self.has_pressed_button = True
         
         if not scanned_data: return
         self.clear_cards()
@@ -418,29 +436,27 @@ class FoodAppLayout(BoxLayout):
         self.clear_cards()
         self.cards_layout.add_widget(NutrientCard(title, msg, (0.5, 0.1, 0.1, 1)))
 
-  
     def get_nearast_point(self):
-        
+        self.lst = {}
         fenomenmagsinet = (58.3912, 15.5608)
         phi1 = math.radians(fenomenmagsinet[0])
         lambda1 = math.radians(fenomenmagsinet[1])
         R = 6371.0
  
-
         for key,value in destinations.linkoping_locations.items():
-            phi2 = value[0]
-            lambda2 = value[1]
-            delta_phi = math.radians(phi2 - phi1)
-            delta_lambda = math.radians(lambda2 - lambda1)
+            phi2 = math.radians(value[0])
+            lambda2 = math.radians(value[1])
 
-            #Haversine beräkning
+            delta_phi = phi2 - phi1
+            delta_lambda = lambda2 - lambda1
+
             a = math.sin(delta_phi / 2)**2 + \
                 math.cos(phi1) * math.cos(phi2) * \
                 math.sin(delta_lambda / 2)**2
             
-            c= 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-            result = c * R
+            result = R * c
 
             self.lst[key] = result
 
@@ -451,12 +467,11 @@ class FoodAppLayout(BoxLayout):
         best_match = ""
         smallest_diff= 10000000
         for key,distance_to_place in self.lst.items():
-            diff = abs(self.distance_to_run - distance_to_place)
+            diff = abs(self.distance_in_km - distance_to_place)
             if diff < smallest_diff:
                 smallest_diff = diff
                 best_match = key
         return best_match
-
 
 
     def _get_status(self, value, min_val, max_val, invert=False):
@@ -486,7 +501,7 @@ class FoodAppLayout(BoxLayout):
                 return "! For mycket", (0.65, 0.1, 0.1, 1), progress
 
     def show_food(self, instance):
-        self.has_pressed_button = True # Registrera aktivitet
+        self.has_pressed_button = True
         self.food_input.text = ""
         if not self.food_list:
             self.show_error("Tom lista", "Scanna livsmedel först.")
@@ -495,10 +510,6 @@ class FoodAppLayout(BoxLayout):
         
         res = Frukostdator.get_data_from_scanner(my_foods_dict, self.food_list)
         self.clear_cards()
-
-        
-
-        age = int(self.age)
 
         self.clear_cards()
 
@@ -511,7 +522,6 @@ class FoodAppLayout(BoxLayout):
 
         percent = round((kcal / daily_kcal) * 100) if daily_kcal > 0 else 0
 
-
         protein_min_day = (daily_kcal * 0.10) / 4
         protein_max_day = (daily_kcal * 0.20) / 4
 
@@ -519,7 +529,6 @@ class FoodAppLayout(BoxLayout):
         fat_max_day = (daily_kcal * 0.40) / 9
 
         sugar_max_day = (daily_kcal * 0.10) / 4
-
 
         protein_min_breakfast = round(protein_min_day * 0.20)
         protein_max_breakfast = round(protein_max_day * 0.25)
@@ -532,38 +541,51 @@ class FoodAppLayout(BoxLayout):
         kcal_min_breakfast = round(daily_kcal * 0.20)
         kcal_max_breakfast = round(daily_kcal * 0.25)
 
-
         protein_percent_day = round((protein_g / protein_max_day) * 100) if protein_max_day > 0 else 0
         fat_percent_day = round((fat_g / fat_max_day) * 100) if fat_max_day > 0 else 0
-        sugar_percent_day = round((sugar_g / sugar_max_day) * 100) if sugar_max_day > 0 else 0
-        
 
-
-        self.distance_to_run = 10000000 * kcal / estimate_weight(self.age)
+        self.distance_to_run = 1000 * kcal / estimate_weight(self.age)
         dimension = "meter"
-        if self.distance_to_run > 1000:
-            self.distance_to_run = round(self.distance_to_run/1000,2)
-            dimension = "km"
+        self.distance_in_km = self.distance_to_run / 1000
+
         if self.distance_to_run >10000:
             self.distance_to_run = round(self.distance_to_run / 10000,2)
             dimension = "mil"
+        elif self.distance_to_run > 1000:
+            self.distance_to_run = round(self.distance_to_run/1000,2)
+            dimension = "km"
 
-     
-
-
-
+        if kcal < kcal_min_breakfast:
+            speed = 0.25
+        elif kcal <= daily_kcal:
+            speed = 0.12
+        else:
+            speed = 0.05
 
         energy_status, energy_color, energy_prog = self._get_status(kcal, kcal_min_breakfast, kcal_max_breakfast)
         nearest = self.get_place()
         self.cards_layout.add_widget(
             NutrientCard(
                 "Energi",
-                f"{kcal} kcal\nMal: {kcal_min_breakfast}-{kcal_max_breakfast} kcal\n{percent}% av dagsintaget\nDu kan springa {self.distance_to_run} {dimension}\n(till {nearest}!)",
+                f"{kcal} kcal\nMal: {kcal_min_breakfast}-{kcal_max_breakfast} kcal\n{percent}% av dagsintaget",
                 energy_color,
                 status_text=energy_status,
                 progress_val=energy_prog,
                 show_progress=True,
                 image_path="../images/Energi.png"
+            )
+        )
+
+        runner = RunningMan(size_hint=(1, None), height=350)
+        self.cards_layout.add_widget(runner)
+        runner.start(speed)
+        Clock.schedule_once(lambda dt: runner.stop(), 5)
+
+        self.cards_layout.add_widget(
+            NutrientCard(
+                "Distans",
+                f"Du kan springa {self.distance_to_run} {dimension}\nDet ar till: {nearest}",
+                (0.3, 0.5, 0.9, 1)
             )
         )
 
@@ -575,14 +597,6 @@ class FoodAppLayout(BoxLayout):
                 sugar_max_day_g=sugar_max_day
             )
         )
-
-
-
-
-
-
-
-        
 
         tablespoons = round(fat_g / 14, 1)
         self.cards_layout.add_widget(
@@ -626,7 +640,7 @@ class FoodAppLayout(BoxLayout):
         self.clear_cards()
         self.selection_stage = "gender"
         self.timer_seconds = 0
-        self.has_pressed_button = False # Nollställ flaggan vid reset
+        self.has_pressed_button = False
         
         self.gender_input.disabled = False
         self.gender_input.text = ""
@@ -642,24 +656,3 @@ class FoodApp(App):
 
 if __name__ == "__main__":
     FoodApp().run()
-
-
-
-
-
-
-
-
-
-
-   
-
-
-
-
-
-
-
-
-      
-
