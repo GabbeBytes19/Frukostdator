@@ -320,112 +320,111 @@ class SugarWidget(QWidget):
         super().__init__(parent)
         self.consumed_g = consumed_g
         self.max_g = max_g
-        self.setMinimumHeight(150)
+        self.setMinimumHeight(170)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
-        G = 3.0
-        total = max(4, math.ceil(max(self.consumed_g, self.max_g) / G) + 3)
-        cC = self.consumed_g / G
-        mC = self.max_g / G
-        COLS = min(int(total), 10)
-        CUBE = min(26, (w - 40) / COLS - 5)
-        GAP  = 5
-        D    = CUBE * 0.48   # pronounced isometric depth
-        step_x = CUBE + GAP + D * 0.62
-        step_y = CUBE + GAP + D * 0.38
-        bx   = (w - (COLS * step_x - GAP)) / 2
-        by   = D * 0.55 + 12
 
-        for i in range(math.ceil(total)):
-            col = i % COLS
-            row = i // COLS
-            cx  = bx + col * step_x
-            cy  = by + row * step_y
+        G    = 4.0                          # 4 g sugar = 1 cube (real sugar cube)
+        cC   = self.consumed_g / G          # cubes consumed (float)
+        mC   = self.max_g / G               # cubes at max (float)
+        n_max  = max(1, math.ceil(mC))      # integer slots allowed
+        n_cons = math.ceil(cC)              # integer consumed
+        total  = max(n_max, n_cons)         # total cubes to draw
 
-            if i < cC:
-                if i < mC:
-                    c_front  = QColor("#FAFAFA")
-                    c_top    = QColor("#DBEAFE")
-                    c_side   = QColor("#93C5FD")
-                    c_border = QColor("#BFDBFE")
-                    c_dot    = QColor(148, 163, 184, 110)
-                else:
-                    c_front  = QColor("#FEE2E2")
-                    c_top    = QColor("#FECACA")
-                    c_side   = QColor("#F87171")
-                    c_border = QColor("#FCA5A5")
-                    c_dot    = QColor(220, 100, 100, 110)
-            else:
-                c_front  = QColor("#F8FAFC")
-                c_top    = QColor("#E2E8F0")
-                c_side   = QColor("#CBD5E1")
-                c_border = QColor("#E2E8F0")
-                c_dot    = QColor(180, 192, 204, 70)
+        # Size cubes so they fit in one row
+        CUBE = min(28, (w - 60) / (total + 0.7) - 4)
+        D    = CUBE * 0.46
+        GAP  = 4
+        step = CUBE + GAP + D * 0.58
+        bx   = (w - (total * step - GAP + D * 0.58)) / 2
+        by   = D * 0.45 + 28              # extra top margin for MAX label
 
-            # drop shadow
+        def draw_cube(cx, cy, c_front, c_top, c_side, c_border, c_dot):
             p.setPen(Qt.NoPen)
-            p.setBrush(QColor(0, 0, 0, 18))
+            p.setBrush(QColor(0, 0, 0, 16))
             p.drawPolygon(QPolygonF([
                 QPointF(cx + 3, cy + 3),
                 QPointF(cx + CUBE + 3, cy + 3),
-                QPointF(cx + CUBE + D * 0.62 + 3, cy - D * 0.38 + 3),
-                QPointF(cx + D * 0.62 + 3, cy - D * 0.38 + 3),
+                QPointF(cx + CUBE + D*0.58 + 3, cy - D*0.42 + 3),
+                QPointF(cx + D*0.58 + 3,        cy - D*0.42 + 3),
             ]))
-
-            # right side face (darkest)
-            p.setBrush(c_side)
-            p.setPen(QPen(c_border, 0.6))
+            p.setBrush(c_side); p.setPen(QPen(c_border, 0.6))
             p.drawPolygon(QPolygonF([
-                QPointF(cx + CUBE,              cy),
-                QPointF(cx + CUBE + D * 0.62,   cy - D * 0.38),
-                QPointF(cx + CUBE + D * 0.62,   cy + CUBE - D * 0.38),
-                QPointF(cx + CUBE,              cy + CUBE),
+                QPointF(cx + CUBE,           cy),
+                QPointF(cx + CUBE + D*0.58,  cy - D*0.42),
+                QPointF(cx + CUBE + D*0.58,  cy + CUBE - D*0.42),
+                QPointF(cx + CUBE,           cy + CUBE),
             ]))
-
-            # top face (medium light)
             p.setBrush(c_top)
-            p.setPen(QPen(c_border, 0.6))
             p.drawPolygon(QPolygonF([
-                QPointF(cx,               cy),
-                QPointF(cx + CUBE,        cy),
-                QPointF(cx + CUBE + D * 0.62, cy - D * 0.38),
-                QPointF(cx + D * 0.62,    cy - D * 0.38),
+                QPointF(cx,              cy),
+                QPointF(cx + CUBE,       cy),
+                QPointF(cx + CUBE + D*0.58, cy - D*0.42),
+                QPointF(cx + D*0.58,     cy - D*0.42),
             ]))
-
-            # front face
-            p.setBrush(c_front)
-            p.setPen(QPen(c_border, 0.6))
+            p.setBrush(c_front); p.setPen(QPen(c_border, 0.6))
             p.drawRect(QRectF(cx, cy, CUBE, CUBE))
-
-            # sugar crystal dots on front face
-            p.setPen(Qt.NoPen)
-            p.setBrush(c_dot)
+            p.setPen(Qt.NoPen); p.setBrush(c_dot)
             dr = max(1.2, CUBE * 0.065)
-            for fdx, fdy in [(0.22, 0.22), (0.72, 0.22), (0.22, 0.72),
-                              (0.72, 0.72), (0.47, 0.47)]:
-                p.drawEllipse(QRectF(
-                    cx + fdx * CUBE - dr, cy + fdy * CUBE - dr, dr * 2, dr * 2
-                ))
-
-            # bright highlight on top-front edge
-            p.setPen(QPen(QColor(255, 255, 255, 200), 1.2))
+            for fdx, fdy in [(0.22,0.22),(0.72,0.22),(0.22,0.72),(0.72,0.72),(0.47,0.47)]:
+                p.drawEllipse(QRectF(cx+fdx*CUBE-dr, cy+fdy*CUBE-dr, dr*2, dr*2))
+            p.setPen(QPen(QColor(255,255,255,200), 1.2))
             p.drawLine(QPointF(cx, cy), QPointF(cx + CUBE, cy))
 
-        # MAX dashed line
-        mRow = int(mC) // COLS
-        ly   = by + mRow * step_y - D * 0.38 - 4
-        pen  = QPen(QColor(RED), 2.2)
-        pen.setDashPattern([6, 3])
-        p.setPen(pen)
-        p.drawLine(QPointF(8, ly), QPointF(w - 8, ly))
-        f2 = QFont(); f2.setBold(True); f2.setPointSize(9)
-        p.setFont(f2)
+        for i in range(total):
+            cx = bx + i * step
+            cy = by
+            filled  = i < cC
+            allowed = i < mC
+            if filled and allowed:
+                draw_cube(cx, cy,
+                    QColor("#FAFAFA"), QColor("#DBEAFE"),
+                    QColor("#93C5FD"), QColor("#BFDBFE"),
+                    QColor(148, 163, 184, 110))
+            elif filled:          # over max → red
+                draw_cube(cx, cy,
+                    QColor("#FEE2E2"), QColor("#FECACA"),
+                    QColor("#F87171"), QColor("#FCA5A5"),
+                    QColor(220, 80, 80, 120))
+            else:                 # empty slot
+                draw_cube(cx, cy,
+                    QColor("#F1F5F9"), QColor("#E2E8F0"),
+                    QColor("#CBD5E1"), QColor("#E2E8F0"),
+                    QColor(180, 192, 204, 60))
+
+        # ── MAX separator line ────────────────────────────────────────────
+        sep_x = bx + n_max * step - GAP * 0.5
+        top_y = by - D * 0.42 - 18
+        bot_y = by + CUBE + 6
+        p.setPen(QPen(QColor(RED), 3.0))
+        p.drawLine(QPointF(sep_x, top_y), QPointF(sep_x, bot_y))
+
+        # Arrow head pointing down into the line
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(RED))
+        p.drawPolygon(QPolygonF([
+            QPointF(sep_x - 5, top_y + 1),
+            QPointF(sep_x + 5, top_y + 1),
+            QPointF(sep_x,     top_y + 9),
+        ]))
+
+        # MAX label above arrow
+        fmax = QFont(); fmax.setBold(True); fmax.setPointSize(9)
+        p.setFont(fmax)
         p.setPen(QColor(RED))
-        p.drawText(QRectF(w - 38, ly - 15, 34, 13), Qt.AlignRight, "MAX")
+        p.drawText(QRectF(sep_x - 22, top_y - 16, 44, 14),
+                   Qt.AlignCenter, "MAX")
+
+        # unit label at bottom
+        fu = QFont(); fu.setPointSize(8)
+        p.setFont(fu)
+        p.setPen(QColor(MUTED))
+        p.drawText(QRectF(0, by + CUBE + 10, w, 14),
+                   Qt.AlignCenter, f"1 sockerkub = {int(G)} g socker")
 
 
 # ── Circle chart (QPainter) ───────────────────────────────────────────────
