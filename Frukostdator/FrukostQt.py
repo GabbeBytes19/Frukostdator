@@ -5,6 +5,7 @@ All input via barcode scanner. Run: python3 FrukostQt.py
 Full-screen on Pi automatically; pass --window for dev.
 """
 import math
+import os
 import sys
 
 from PyQt5.QtCore import QPointF, QRectF, Qt, QTimer, pyqtSignal
@@ -15,7 +16,9 @@ from PyQt5.QtGui import (
     QPainter,
     QPainterPath,
     QPen,
+    QPixmap,
     QPolygonF,
+    QTransform,
 )
 from PyQt5.QtWidgets import (
     QApplication,
@@ -216,14 +219,20 @@ def scanner_field(placeholder, color=AMBER_B):
     return e
 
 
-# ── Running man (QPainter, smooth animation) ──────────────────────────────
+# ── Chameleon runner (animated bounce) ───────────────────────────────────
+_CHAM_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          "Loggan-i-farg-e1740579067534.png")
+
 class RunnerWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(130, 190)
+        self.setFixedSize(160, 140)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.t = 0.0
+        self.t  = 0.0
         self.dt = 0.09
+        px = QPixmap(_CHAM_PATH)
+        # Scale to fit widget, keep aspect ratio
+        self._px = px.scaled(120, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self._tmr = QTimer(self)
         self._tmr.timeout.connect(self._tick)
         self._tmr.start(33)
@@ -238,80 +247,39 @@ class RunnerWidget(QWidget):
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        cx = self.width() // 2
-        bounce = abs(math.sin(self.t)) * 7
-        base_y = self.height() - 16
-        tb = base_y - 60 - bounce
-        tt = tb - 34
-        head_cy = tt - 22
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        w, h = self.width(), self.height()
 
-        la = math.sin(self.t) * math.radians(36)
-        ra = math.sin(self.t + math.pi) * math.radians(36)
-        ll = math.sin(self.t + 0.5) * math.radians(32)
-        rl = math.sin(self.t + 0.5 + math.pi) * math.radians(32)
-        AL, LL = 30, 36
+        bounce  = abs(math.sin(self.t)) * 9          # vertical hop
+        tilt    = math.sin(self.t) * 4               # gentle lean in degrees
+        n_lines = 3 if self.dt < 0.07 else (2 if self.dt < 0.12 else 1)  # more lines = faster
 
-        # shadow
+        px_w = self._px.width()
+        px_h = self._px.height()
+        img_x = (w - px_w) // 2 + 10                # slightly right to leave room for lines
+        img_y = int((h - px_h) / 2 - bounce + 4)
+
+        # shadow on ground
         p.setPen(Qt.NoPen)
-        p.setBrush(QColor(0, 0, 0, 28))
-        p.drawEllipse(QRectF(cx - 18, base_y + 2, 36, 10))
+        shadow_alpha = max(20, 60 - int(bounce * 3))
+        p.setBrush(QColor(0, 0, 0, shadow_alpha))
+        p.drawEllipse(QRectF(img_x + px_w * 0.1, h - 18,
+                             px_w * 0.8, 10 - bounce * 0.3))
 
-        # speed lines
+        # speed lines to the left
+        line_x = img_x - 8
         p.setPen(QPen(QColor(AMBER_B), 3, Qt.SolidLine, Qt.RoundCap))
-        for dy in (-14, -2, 9):
-            p.drawLine(cx - 42, int(head_cy + dy), cx - 54, int(head_cy + dy))
+        for i in range(n_lines):
+            ly = img_y + px_h * 0.3 + i * (px_h * 0.22)
+            length = 22 - i * 5
+            p.drawLine(QPointF(line_x - length, ly), QPointF(line_x, ly))
 
-        # legs
-        p.setPen(QPen(QColor(ORANGE), 10, Qt.SolidLine, Qt.RoundCap))
-        lx = cx - 5 + math.sin(ll) * LL
-        ly = tb + math.cos(ll) * LL
-        rx = cx + 5 + math.sin(rl) * LL
-        ry = tb + math.cos(rl) * LL
-        p.drawLine(cx - 5, int(tb), int(lx), int(ly))
-        p.drawLine(cx + 5, int(tb), int(rx), int(ry))
-
-        # shoes
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor(DARK))
-        p.drawEllipse(QRectF(lx - 9, ly - 4, 18, 9))
-        p.drawEllipse(QRectF(rx - 9, ry - 4, 18, 9))
-
-        # body
-        p.setBrush(QColor(BLUE))
-        p.drawRoundedRect(QRectF(cx - 13, tt, 26, 36), 11, 11)
-        p.setBrush(QColor(255, 255, 255, 55))
-        p.drawRoundedRect(QRectF(cx - 13, tt + 11, 26, 7), 4, 4)
-
-        # arms
-        p.setPen(QPen(QColor("#FBBF24"), 10, Qt.SolidLine, Qt.RoundCap))
-        lax = cx - 11 + math.sin(la) * AL
-        lay = tt + 9 + math.cos(la) * AL
-        rax = cx + 11 + math.sin(ra) * AL
-        ray = tt + 9 + math.cos(ra) * AL
-        p.drawLine(cx - 11, int(tt + 9), int(lax), int(lay))
-        p.drawLine(cx + 11, int(tt + 9), int(rax), int(ray))
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor("#FBBF24"))
-        p.drawEllipse(QRectF(lax - 6, lay - 6, 12, 12))
-        p.drawEllipse(QRectF(rax - 6, ray - 6, 12, 12))
-
-        # head
-        p.setBrush(QColor("#FBBF24"))
-        p.drawEllipse(QRectF(cx - 19, head_cy - 19, 38, 38))
-        p.setBrush(QColor(239, 100, 100, 55))
-        p.drawEllipse(QRectF(cx - 19, head_cy - 2, 10, 10))
-        p.drawEllipse(QRectF(cx + 9, head_cy - 2, 10, 10))
-        p.setBrush(QColor(DARK))
-        p.drawEllipse(QRectF(cx - 11, head_cy - 8, 7, 7))
-        p.drawEllipse(QRectF(cx + 4, head_cy - 8, 7, 7))
-        p.setBrush(Qt.white)
-        p.drawEllipse(QRectF(cx - 9, head_cy - 10, 3, 3))
-        p.drawEllipse(QRectF(cx + 6, head_cy - 10, 3, 3))
-        smile = QPainterPath()
-        smile.moveTo(cx - 8, head_cy + 2)
-        smile.cubicTo(cx - 3, head_cy + 8, cx + 3, head_cy + 8, cx + 8, head_cy + 2)
-        p.setPen(QPen(QColor(DARK), 2.5, Qt.SolidLine, Qt.RoundCap))
-        p.drawPath(smile)
+        # draw chameleon with tilt
+        p.save()
+        p.translate(img_x + px_w / 2, img_y + px_h / 2)
+        p.rotate(tilt)
+        p.drawPixmap(-px_w // 2, -px_h // 2, self._px)
+        p.restore()
 
 
 # ── Sugar cubes (QPainter) ────────────────────────────────────────────────
