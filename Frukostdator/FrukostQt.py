@@ -328,27 +328,25 @@ class SugarWidget(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
 
-        G      = 4.0
-        cC     = self.consumed_g / G   # float cubes consumed
-        mC     = self.max_g / G        # float cubes at max
-        n_max  = max(1, math.ceil(mC))
-        n_cons = math.ceil(cC)
-        total  = max(n_max, n_cons, 1)
+        G        = 4.0
+        cC       = self.consumed_g / G          # float cubes consumed
+        mC       = self.max_g / G               # float cubes at max
+        n_max    = max(1, math.ceil(mC))        # slots that fit within max
+        n_filled = max(0, math.floor(cC))       # whole cubes actually eaten
 
-        # Leave room: top for MAX label, bottom for unit label
+        # Scale widget to n_max so MAX line is always in frame.
+        # Only draw CONSUMED cubes — no empty outlines.
         LBL_H  = 18
         TOP_M  = 28
         BOT_M  = LBL_H + 6
-        D_FRAC = 0.44            # isometric depth fraction
-        # CUBE height so stack fits vertically
+        D_FRAC = 0.44
         usable = h - TOP_M - BOT_M
-        CUBE   = max(10, min(32, usable / total - 1))
+        CUBE   = max(10, min(32, usable / n_max - 1))
         D      = CUBE * D_FRAC
 
-        # Horizontal layout: stack centred, MAX label fits to the right
         stack_w = CUBE + D * 0.58
-        cx      = (w - stack_w) / 2 - 10   # shift left slightly for MAX text
-        base_y  = h - BOT_M                # bottom of the lowest cube
+        cx      = (w - stack_w) / 2 - 10
+        base_y  = h - BOT_M
 
         def draw_cube(top_y, c_front, c_top, c_side, c_border, c_dot):
             # right side face
@@ -379,26 +377,20 @@ class SugarWidget(QWidget):
             p.setPen(QPen(QColor(255,255,255,210), 1.2))
             p.drawLine(QPointF(cx, top_y), QPointF(cx + CUBE, top_y))
 
-        # Draw cubes bottom→top (painter's algorithm)
-        for i in range(total):
-            top_y  = base_y - (i + 1) * CUBE
-            filled  = (i + 1) <= cC   # whole cubes only — 9g = 2 cubes, not 3
+        # Draw only consumed cubes bottom→top — no empty outlines
+        for i in range(n_filled):
+            top_y   = base_y - (i + 1) * CUBE
             allowed = i < mC
-            if filled and allowed:
+            if allowed:
                 draw_cube(top_y,
                     QColor("#FAFAFA"), QColor("#DBEAFE"),
                     QColor("#93C5FD"), QColor("#BFDBFE"),
                     QColor(148, 163, 184, 100))
-            elif filled:
+            else:
                 draw_cube(top_y,
                     QColor("#FEE2E2"), QColor("#FECACA"),
                     QColor("#F87171"), QColor("#FCA5A5"),
                     QColor(220, 80, 80, 120))
-            else:
-                draw_cube(top_y,
-                    QColor("#F1F5F9"), QColor("#E2E8F0"),
-                    QColor("#CBD5E1"), QColor("#E2E8F0"),
-                    QColor(180, 192, 204, 55))
 
         # ── MAX horizontal line at exact fractional height ────────────────
         max_y  = base_y - mC * CUBE
@@ -790,13 +782,13 @@ class ResultsPage(QWidget):
         v.addWidget(lbl(st, 12, True, sc))
         v.addWidget(lbl(f"{round(res['kcal'])} kcal", 32, True, AMBER, Qt.AlignCenter))
         v.addWidget(
-            lbl(f"Mål: {res['kcal_min']}–{res['kcal_max']} kcal", 11, False, "#92400E")
+            lbl(f"Mål: {res['kcal_min']}–{res['kcal_max']} kcal", 12, True, "#92400E")
         )
         v.addWidget(
             lbl(
                 f"{res['pct']}% av dagsbehovet ({round(res['daily'])} kcal)",
-                10,
-                False,
+                12,
+                True,
                 MUTED,
             )
         )
@@ -835,9 +827,9 @@ class ResultsPage(QWidget):
         c, v = card_vbox(VIOLET_L, VIOLET_B)
         v.addWidget(lbl("📍 Distans", 17, True, "#5B21B6"))
         v.addWidget(hline(VIOLET_B))
-        v.addWidget(lbl("Du kan springa...", 11, False, MUTED))
+        v.addWidget(lbl("Du kan springa...", 12, True, MUTED))
         v.addWidget(lbl(f"{dv} {du}", 32, True, VIOLET, Qt.AlignCenter))
-        v.addWidget(lbl("Ungefär till:", 11, False, MUTED))
+        v.addWidget(lbl("Ungefär till:", 12, True, MUTED))
         v.addWidget(lbl(res["place"], 14, True, "#4C1D95"))
         self._grid.addWidget(c, 0, 2)
 
@@ -849,7 +841,7 @@ class ResultsPage(QWidget):
         st, sc = get_status(res["sug"], 0.001, res["sug_max"])
         v.addWidget(lbl(st, 12, True, sc))
         v.addWidget(
-            lbl(f"{round(res['sug'],1)} g  /  max {res['sug_max']} g", 11, False, MUTED)
+            lbl(f"{round(res['sug'],1)} g  /  max {res['sug_max']} g", 12, True, MUTED)
         )
         v.addWidget(SugarWidget(res["sug"], res["sug_max"]))
         self._grid.addWidget(c, 1, 0)
@@ -870,8 +862,8 @@ class ResultsPage(QWidget):
         v.addWidget(
             lbl(
                 f"Dagsbudget: {res['fat_min_d']}–{res['fat_max_d']} g",
-                10,
-                False,
+                12,
+                True,
                 MUTED,
                 Qt.AlignCenter,
             )
@@ -894,8 +886,8 @@ class ResultsPage(QWidget):
         v.addWidget(
             lbl(
                 f"Dagsbudget: {res['pro_min_d']}–{res['pro_max_d']} g",
-                10,
-                False,
+                12,
+                True,
                 MUTED,
                 Qt.AlignCenter,
             )
