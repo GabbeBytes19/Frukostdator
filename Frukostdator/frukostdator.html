@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Frukostdatorn 🍳</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Nunito', sans-serif;
+      background-color: #FFF9F0;
+      background-image: radial-gradient(circle, rgba(251,191,36,0.18) 1.2px, transparent 1.2px);
+      background-size: 28px 28px;
+      min-height: 100vh;
+    }
+
+    .fredoka { font-family: 'Fredoka', cursive; }
+    .nunito  { font-family: 'Nunito', sans-serif; }
+
+    /* ── Entrance animations ── */
+    @keyframes bounceIn {
+      0%   { opacity:0; transform: scale(0.45) translateY(28px); }
+      55%  { transform: scale(1.07) translateY(-7px); }
+      75%  { transform: scale(0.97) translateY(3px); }
+      100% { opacity:1; transform: scale(1) translateY(0); }
+    }
+    @keyframes slideUp {
+      from { opacity:0; transform:translateY(22px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity:0; } to { opacity:1; }
+    }
+    @keyframes pop {
+      0%,100% { transform: scale(1); }
+      40%     { transform: scale(1.12); }
+    }
+
+    .bounce-in { animation: bounceIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both; }
+    .slide-up  { animation: slideUp  0.4s ease-out both; }
+    .fade-in   { animation: fadeIn   0.3s ease-out both; }
+
+    /* ── Confetti ── */
+    @keyframes confettiFall {
+      0%   { transform: translateY(-30px) rotate(0deg)   scale(1); opacity:1; }
+      80%  { opacity:.8; }
+      100% { transform: translateY(105vh) rotate(600deg) scale(.5); opacity:0; }
+    }
+
+    /* ── Running man ── */
+    @keyframes runnerBounce {
+      0%,100% { transform: translateY(0); }
+      50%     { transform: translateY(-9px); }
+    }
+    @keyframes armForward {
+      0%,100% { transform: rotate(-32deg); }
+      50%     { transform: rotate( 32deg); }
+    }
+    @keyframes armBack {
+      0%,100% { transform: rotate( 32deg); }
+      50%     { transform: rotate(-32deg); }
+    }
+    @keyframes legForward {
+      0%,100% { transform: rotate(-28deg); }
+      50%     { transform: rotate( 36deg); }
+    }
+    @keyframes legBack {
+      0%,100% { transform: rotate( 36deg); }
+      50%     { transform: rotate(-28deg); }
+    }
+
+    .runner-body { animation: runnerBounce var(--rs,.5s) ease-in-out infinite; }
+    .larm { animation: armForward var(--rs,.5s) ease-in-out infinite; transform-origin: 38px 65px; }
+    .rarm { animation: armBack    var(--rs,.5s) ease-in-out infinite; transform-origin: 82px 65px; }
+    .lleg { animation: legForward var(--rs,.5s) ease-in-out infinite; transform-origin: 48px 108px; }
+    .rleg { animation: legBack    var(--rs,.5s) ease-in-out infinite; transform-origin: 72px 108px; }
+
+    /* ── Speed lines ── */
+    @keyframes speedLine {
+      from { transform: translateX(0); opacity:.6; }
+      to   { transform: translateX(-30px); opacity:0; }
+    }
+    .speed-line { animation: speedLine var(--rs,.5s) ease-out infinite; }
+
+    /* ── Misc ── */
+    button { cursor: pointer; transition: transform .12s, box-shadow .12s; }
+    button:active { transform: scale(0.93) !important; }
+    input:focus { outline: none; }
+
+    ::-webkit-scrollbar       { width: 7px; }
+    ::-webkit-scrollbar-track { background: rgba(251,191,36,.12); }
+    ::-webkit-scrollbar-thumb { background: #FCD34D; border-radius: 4px; }
+
+    .card { border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+    .card-title { font-family:'Fredoka',cursive; font-size:1.35rem; }
+    .card hr { border: none; border-top: 2px solid rgba(0,0,0,.08); margin:2px 0; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+/* ═══════════════════════════════════════════════════════════════
+   FOOD DATABASE  —  place frukost_livsmedel.json beside this
+   file for the full Swedish database; these are fallback values.
+═══════════════════════════════════════════════════════════════ */
+/* __FULL_FOODS_PLACEHOLDER__ */
+const BASE_FOODS = {
+  "havregryn":      {Energi:379, Fett:7.0,  Protein:13.0, Socker:1.0 },
+  "cornflakes":     {Energi:357, Fett:0.5,  Protein:7.0,  Socker:7.0 },
+  "mjölk":          {Energi:62,  Fett:3.0,  Protein:3.3,  Socker:4.8 },
+  "filmjölk":       {Energi:61,  Fett:3.0,  Protein:3.5,  Socker:5.2 },
+  "fil":            {Energi:64,  Fett:3.5,  Protein:3.0,  Socker:4.0 },
+  "yoghurt":        {Energi:68,  Fett:3.5,  Protein:4.5,  Socker:5.5 },
+  "smör":           {Energi:717, Fett:80.0, Protein:0.5,  Socker:0.1 },
+  "ägg":            {Energi:143, Fett:9.7,  Protein:13.4, Socker:0.6 },
+  "bacon":          {Energi:548, Fett:47.0, Protein:26.0, Socker:0.0 },
+  "vitt bröd":      {Energi:264, Fett:2.5,  Protein:9.0,  Socker:4.0 },
+  "rågbröd":        {Energi:228, Fett:1.5,  Protein:7.0,  Socker:1.0 },
+  "knäckebröd":     {Energi:345, Fett:3.5,  Protein:11.0, Socker:1.0 },
+  "ost":            {Energi:316, Fett:23.0, Protein:26.0, Socker:0.0 },
+  "apelsinjuice":   {Energi:43,  Fett:0.2,  Protein:0.7,  Socker:8.4 },
+  "marmelad":       {Energi:250, Fett:0.0,  Protein:0.4,  Socker:58.0},
+  "honung":         {Energi:304, Fett:0.0,  Protein:0.3,  Socker:76.0},
+  "banan":          {Energi:89,  Fett:0.3,  Protein:1.1,  Socker:12.0},
+  "äpple":          {Energi:52,  Fett:0.2,  Protein:0.3,  Socker:10.0},
+  "jordnötssmör":   {Energi:589, Fett:50.0, Protein:25.0, Socker:8.0 },
+  "skinka":         {Energi:108, Fett:3.5,  Protein:18.0, Socker:0.5 },
+  "müsli":          {Energi:360, Fett:6.0,  Protein:9.0,  Socker:20.0},
+  "kesella":        {Energi:60,  Fett:0.2,  Protein:12.0, Socker:4.0 },
+  "kvarg":          {Energi:74,  Fett:2.5,  Protein:10.0, Socker:4.4 },
+  "lax":            {Energi:207, Fett:11.0, Protein:27.0, Socker:0.0 },
+  "kaviar":         {Energi:283, Fett:17.0, Protein:29.0, Socker:4.0 },
+  "apelsin":        {Energi:47,  Fett:0.1,  Protein:0.9,  Socker:9.4 },
+  "jordgubbar":     {Energi:33,  Fett:0.4,  Protein:0.7,  Socker:4.9 },
+  "blåbär":         {Energi:57,  Fett:0.3,  Protein:0.7,  Socker:10.0},
+  "hallon":         {Energi:52,  Fett:0.7,  Protein:1.2,  Socker:5.5 },
+  "gröt":           {Energi:140, Fett:4.0,  Protein:4.5,  Socker:0.5 },
+  "tomat":          {Energi:18,  Fett:0.2,  Protein:0.9,  Socker:2.6 },
+  "gurka":          {Energi:15,  Fett:0.1,  Protein:0.6,  Socker:1.7 },
+  "skyr":           {Energi:63,  Fett:0.2,  Protein:11.0, Socker:4.0 },
+  "havremjölk":     {Energi:46,  Fett:1.5,  Protein:0.9,  Socker:4.0 },
+  "sojamjölk":      {Energi:44,  Fett:2.0,  Protein:3.5,  Socker:2.8 },
+  "nötmjölk":       {Energi:25,  Fett:2.5,  Protein:0.5,  Socker:0.5 },
+  "chokladdryck":   {Energi:76,  Fett:2.5,  Protein:3.0,  Socker:10.0},
+  "wasa":           {Energi:345, Fett:3.5,  Protein:11.0, Socker:1.0 },
+  "nötter":         {Energi:607, Fett:54.0, Protein:15.0, Socker:4.4 },
+  "mandel":         {Energi:578, Fett:50.0, Protein:21.0, Socker:4.2 },
+  "keso":           {Energi:80,  Fett:4.0,  Protein:10.0, Socker:2.0 },
+  "levain":         {Energi:258, Fett:2.0,  Protein:8.5,  Socker:2.0 },
+  "macka":          {Energi:264, Fett:2.5,  Protein:9.0,  Socker:4.0 },
+  "frukostflingor": {Energi:380, Fett:2.0,  Protein:8.0,  Socker:20.0},
+  "russin":         {Energi:303, Fett:0.5,  Protein:2.5,  Socker:66.0},
+  "päron":          {Energi:57,  Fett:0.1,  Protein:0.4,  Socker:10.0},
+  "äggröra":        {Energi:149, Fett:11.0, Protein:10.0, Socker:0.7 },
+  "solrosfrön":     {Energi:584, Fett:51.0, Protein:21.0, Socker:2.6 },
+  "druvjuice":      {Energi:60,  Fett:0.1,  Protein:0.3,  Socker:14.0},
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   DESTINATIONS (Linköping, from FenomenMagasinet at 58.3912,15.5608)
+═══════════════════════════════════════════════════════════════ */
+const DEST = {
+  "Domkyrkan":                [58.4111,15.6171],
+  "Trädgårdsföreningen":      [58.4067,15.6263],
+  "Saab Arena":               [58.4136,15.6335],
+  "Gamla Linköping":          [58.4062,15.5902],
+  "Linköpings Universitet":   [58.3978,15.5785],
+  "Tinnerö Eklandskap":       [58.3883,15.6192],
+  "Flygvapenmuseum":          [58.4103,15.5255],
+  "IKEA Tornby":              [58.4332,15.5898],
+  "Stångåpromenaden":         [58.4012,15.6389],
+  "Bergs Slussar":            [58.4852,15.5274],
+  "Landeryds Golfklubb":      [58.3582,15.6721],
+  "Vidingsjö Motionscentrum": [58.3756,15.6552],
+};
+const FM_LAT=58.3912, FM_LON=15.5608;
+
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════════════════ */
+function haversine(la1,lo1,la2,lo2){
+  const R=6371, p1=la1*Math.PI/180, p2=la2*Math.PI/180;
+  const dp=(la2-la1)*Math.PI/180, dl=(lo2-lo1)*Math.PI/180;
+  const a=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function estimateWeight(age){
+  if(age<=10) return (age+4)*2;
+  if(age<=20) return age*3+7;
+  return 75;
+}
+
+function dailyKcal(age,gender){
+  let m,f;
+  if(age<=3)  return 1100;
+  if(age<=6)  return 1510;
+  if(age<=10) return 1860;
+  if(age<=14){m=2510;f=2200;}
+  else if(age<=17){m=3040;f=2410;}
+  else if(age<=24){m=2800;f=2200;}
+  else if(age<=50){m=2700;f=2200;}
+  else if(age<=70){m=2500;f=2000;}
+  else{m=2400;f=2000;}
+  if(gender==='man')   return m;
+  if(gender==='kvinna')return f;
+  return (m+f)/2;
+}
+
+function status(v,lo,hi){
+  if(v<lo)  return {text:'⚠️ Lite lite',   color:'#D97706'};
+  if(v<=hi) return {text:'✅ Perfekt!',     color:'#059669'};
+  return        {text:'🔴 Lite för mycket', color:'#DC2626'};
+}
+
+function nearestPlace(distKm){
+  let best='', minD=Infinity;
+  for(const[n,[la,lo]] of Object.entries(DEST)){
+    const d=haversine(FM_LAT,FM_LON,la,lo), diff=Math.abs(distKm-d);
+    if(diff<minD){minD=diff;best=n;}
+  }
+  return best;
+}
+
+function fmtDist(meters){
+  if(meters>10000) return {v:(meters/10000).toFixed(2),u:'mil'};
+  if(meters>1000)  return {v:(meters/1000).toFixed(2), u:'km'};
+  return {v:Math.round(meters),u:'meter'};
+}
+
+function calcResults(foods,list,age,gender){
+  let kcal=0,fat=0,prot=0,sug=0;
+  for(const n of list){
+    const info=foods[n.trim().toLowerCase()];
+    if(info){kcal+=info.Energi;fat+=info.Fett;prot+=info.Protein;sug+=info.Socker;}
+  }
+  const daily=dailyKcal(age,gender), w=estimateWeight(age);
+  const distKm=kcal/w, distM=distKm*1000;
+  const fatMinD=daily*.25/9, fatMaxD=daily*.40/9;
+  const proMinD=daily*.10/4, proMaxD=daily*.20/4;
+  const sugMaxD=daily*.10/4;
+  return {
+    kcal,fat,prot,sug,daily,
+    pct:Math.round((kcal/daily)*100),
+    kcalMin:Math.round(daily*.20), kcalMax:Math.round(daily*.25),
+    fatMin:Math.round(fatMinD*.20), fatMax:Math.round(fatMaxD*.25),
+    fatMinD:Math.round(fatMinD),    fatMaxD:Math.round(fatMaxD),
+    proMin:Math.round(proMinD*.20), proMax:Math.round(proMaxD*.25),
+    proMinD:Math.round(proMinD),    proMaxD:Math.round(proMaxD),
+    sugMax:Math.round(sugMaxD*.25),
+    distKm, distM, place:nearestPlace(distKm),
+    speed: kcal<Math.round(daily*.20)?1.1:kcal<=daily?.55:.27,
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CONFETTI
+═══════════════════════════════════════════════════════════════ */
+function Confetti({active}){
+  const pieces=useMemo(()=>active?Array.from({length:72},(_,i)=>({
+    id:i,left:Math.random()*100,
+    color:['#FF8C00','#10B981','#3B82F6','#8B5CF6','#EF4444','#FCD34D','#06D6A0','#F97316'][i%8],
+    sz:8+Math.random()*10, delay:Math.random()*1.6,
+    dur:2.4+Math.random()*1.5, circle:Math.random()>.5,
+  })):[],[active]);
+  if(!active)return null;
+  return(
+    <div style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:300,overflow:'hidden'}}>
+      {pieces.map(p=>(
+        <div key={p.id} style={{
+          position:'absolute',left:`${p.left}%`,top:'-30px',
+          width:p.sz,height:p.circle?p.sz:p.sz*.6,
+          background:p.color,borderRadius:p.circle?'50%':'3px',
+          animation:`confettiFall ${p.dur}s ease-in ${p.delay}s forwards`,
+        }}/>
+      ))}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RUNNING MAN
+═══════════════════════════════════════════════════════════════ */
+function RunnerSVG({speed}){
+  const s=`${speed}s`;
+  return(
+    <svg width="120" height="180" viewBox="0 0 120 180" style={{'--rs':s}}>
+      <g className="runner-body">
+        <ellipse cx="60" cy="174" rx="28" ry="6" fill="rgba(0,0,0,0.10)"/>
+        {/* Speed lines */}
+        <g className="speed-line">
+          <line x1="8" y1="88"  x2="26" y2="88"  stroke="#FCD34D" strokeWidth="3" strokeLinecap="round" opacity=".8"/>
+          <line x1="4" y1="100" x2="20" y2="100" stroke="#FCD34D" strokeWidth="2" strokeLinecap="round" opacity=".5"/>
+          <line x1="10" y1="76" x2="22" y2="76"  stroke="#FCD34D" strokeWidth="2" strokeLinecap="round" opacity=".4"/>
+        </g>
+        {/* Head */}
+        <circle cx="60" cy="28" r="22" fill="#FBBF24"/>
+        <circle cx="51" cy="23" r="4"  fill="#1C1917"/>
+        <circle cx="69" cy="23" r="4"  fill="#1C1917"/>
+        <circle cx="52" cy="21" r="1.8" fill="white"/>
+        <circle cx="70" cy="21" r="1.8" fill="white"/>
+        <path d="M50 33 Q60 41 70 33" stroke="#1C1917" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+        <circle cx="47" cy="31" r="5" fill="rgba(239,100,100,.22)"/>
+        <circle cx="73" cy="31" r="5" fill="rgba(239,100,100,.22)"/>
+        {/* Body */}
+        <ellipse cx="60" cy="83" rx="17" ry="25" fill="#3B82F6"/>
+        <rect x="44" y="79" width="32" height="6" rx="3" fill="rgba(255,255,255,.28)"/>
+        {/* Left arm */}
+        <g className="larm">
+          <line x1="38" y1="65" x2="13" y2="92" stroke="#FBBF24" strokeWidth="10" strokeLinecap="round"/>
+          <circle cx="11" cy="93" r="7" fill="#FBBF24"/>
+        </g>
+        {/* Right arm */}
+        <g className="rarm">
+          <line x1="82" y1="65" x2="107" y2="92" stroke="#FBBF24" strokeWidth="10" strokeLinecap="round"/>
+          <circle cx="109" cy="93" r="7" fill="#FBBF24"/>
+        </g>
+        {/* Left leg */}
+        <g className="lleg">
+          <line x1="48" y1="108" x2="29" y2="152" stroke="#F97316" strokeWidth="11" strokeLinecap="round"/>
+          <ellipse cx="23" cy="159" rx="13" ry="7" fill="#1C1917" transform="rotate(-15,23,159)"/>
+        </g>
+        {/* Right leg */}
+        <g className="rleg">
+          <line x1="72" y1="108" x2="91" y2="152" stroke="#F97316" strokeWidth="11" strokeLinecap="round"/>
+          <ellipse cx="97" cy="159" rx="13" ry="7" fill="#1C1917" transform="rotate(15,97,159)"/>
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SUGAR CUBES SVG
+═══════════════════════════════════════════════════════════════ */
+function SugarCubesSVG({consumedG,maxG}){
+  const VW=290,VH=175;
+  const G=3.0;
+  const total=Math.max(4,Math.ceil(Math.max(consumedG,maxG)/G)+3);
+  const cCubes=consumedG/G, mCubes=maxG/G;
+  const COLS=Math.min(total,9);
+  const CUBE=Math.min(28,(VW-44)/COLS-4);
+  const GAP=5, D=CUBE*.32;
+  const rows=Math.ceil(total/COLS);
+  const bX=(VW-(COLS*(CUBE+GAP)-GAP))/2, bY=D+14;
+
+  const cubes=Array.from({length:Math.ceil(total)},(_,i)=>{
+    const col=i%COLS, row=Math.floor(i/COLS);
+    const cx=bX+col*(CUBE+GAP), cy=bY+row*(CUBE+GAP+D*.28);
+    let f,t,s;
+    if(i<cCubes){ if(i<mCubes){f='#22c55e';t='#86efac';s='#15803d';}
+                  else{f='#ef4444';t='#fca5a5';s='#b91c1c';}}
+    else{f='#e5e7eb';t='#f3f4f6';s='#d1d5db';}
+    return{cx,cy,f,t,s};
+  });
+
+  const mCol=Math.floor(mCubes)%COLS, mRow=Math.floor(mCubes/COLS);
+  const lineY=bY+mRow*(CUBE+GAP+D*.28)-D*.4-3;
+
+  return(
+    <svg width="100%" viewBox={`0 0 ${VW} ${VH}`} style={{overflow:'visible'}}>
+      {cubes.map(({cx,cy,f,t,s},i)=>(
+        <g key={i}>
+          <rect x={cx+3} y={cy+3} width={CUBE} height={CUBE} fill="rgba(0,0,0,.13)" rx="2"/>
+          <rect x={cx}   y={cy}   width={CUBE} height={CUBE} fill={f} rx="2"/>
+          <polygon points={`${cx},${cy} ${cx+CUBE},${cy} ${cx+CUBE+D*.7},${cy-D*.5} ${cx+D*.7},${cy-D*.5}`} fill={t}/>
+          <polygon points={`${cx+CUBE},${cy} ${cx+CUBE+D*.7},${cy-D*.5} ${cx+CUBE+D*.7},${cy+CUBE-D*.5} ${cx+CUBE},${cy+CUBE}`} fill={s}/>
+          <rect x={cx+2} y={cy+3} width={CUBE-4} height={3} fill="rgba(255,255,255,.28)" rx="1"/>
+        </g>
+      ))}
+      <line x1={8} y1={lineY} x2={VW-8} y2={lineY} stroke="#ef4444" strokeWidth={2.2} strokeDasharray="8,4" opacity={.85}/>
+      <rect x={VW-38} y={lineY-14} width={34} height={14} rx={7} fill="#ef4444" opacity={.15}/>
+      <text x={VW-21} y={lineY-4} fill="#ef4444" fontSize={10} fontWeight="800" fontFamily="Nunito,sans-serif" textAnchor="middle">MAX</text>
+    </svg>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CIRCLE CHART
+═══════════════════════════════════════════════════════════════ */
+function CircleChart({value,lo,hi,color}){
+  const R=58,CX=76,CY=76;
+  const circ=2*Math.PI*R;
+  const pct=hi>0?Math.min(value/hi,1.5):0;
+  const offset=circ*(1-Math.min(pct,1));
+  const arc=value>hi?'#EF4444':color;
+  return(
+    <svg width="152" height="152" viewBox="0 0 152 152">
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#F3F4F6" strokeWidth={15}/>
+      {pct>0&&(
+        <circle cx={CX} cy={CY} r={R} fill="none" stroke={arc} strokeWidth={15}
+          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+          transform={`rotate(-90 ${CX} ${CY})`}
+          style={{transition:'stroke-dashoffset 1.1s ease-out'}}/>
+      )}
+      <circle cx={CX} cy={CY} r={R-16} fill="white"/>
+      <circle cx={CX} cy={CY} r={R-16} fill={arc} fillOpacity={.07}/>
+      <text x={CX} y={CY-7} textAnchor="middle" fontSize={18} fontWeight="700" fill="#1C1917" fontFamily="Fredoka,cursive">
+        {Math.round(value*10)/10}g
+      </text>
+      <text x={CX} y={CY+11} textAnchor="middle" fontSize={10} fill="#78716C" fontFamily="Nunito,sans-serif">
+        {Math.round(lo)}–{Math.round(hi)} g
+      </text>
+      <rect x={CX-20} y={CY+46} width={40} height={18} rx={9} fill={arc} fillOpacity={.15}/>
+      <text x={CX} y={CY+58} textAnchor="middle" fontSize={11} fontWeight="800" fill={arc} fontFamily="Nunito,sans-serif">
+        {Math.round(pct*100)}%
+      </text>
+    </svg>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RESULT CARDS
+═══════════════════════════════════════════════════════════════ */
+function EnergyCard({res,delay}){
+  const st=status(res.kcal,res.kcalMin,res.kcalMax);
+  return(
+    <div className="bounce-in card" style={{background:'#FEF3C7',border:'4px solid #FCD34D',animationDelay:`${delay}ms`}}>
+      <div className="card-title" style={{color:'#92400E'}}>⚡ Energi</div>
+      <hr/>
+      <div style={{fontFamily:'Nunito',fontWeight:800,fontSize:'1rem',color:st.color}}>{st.text}</div>
+      <div style={{fontFamily:'Fredoka,cursive',fontSize:'2.8rem',color:'#B45309',lineHeight:1}}>{Math.round(res.kcal)}</div>
+      <div style={{fontFamily:'Nunito',fontWeight:700,color:'#D97706',fontSize:'.9rem'}}>kcal</div>
+      <div style={{background:'#FDE68A',borderRadius:14,padding:'10px 14px',marginTop:4}}>
+        <div style={{fontFamily:'Nunito',fontSize:'.85rem',color:'#92400E'}}>
+          <b>Mål:</b> {res.kcalMin}–{res.kcalMax} kcal
+        </div>
+        <div style={{fontFamily:'Nunito',fontSize:'.8rem',color:'#B45309',marginTop:3}}>
+          {res.pct}% av ditt dagsbehov ({Math.round(res.daily)} kcal)
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RunnerCard({res,delay}){
+  const msg=res.speed>=1?'Lugnt tempo 🐢':res.speed>=.5?'Bra fart! 🏃':'SUPERSNABB!! 🚀';
+  return(
+    <div className="bounce-in card" style={{background:'#EFF6FF',border:'4px solid #93C5FD',animationDelay:`${delay}ms`,alignItems:'center'}}>
+      <div className="card-title" style={{color:'#1E40AF'}}>🏃 Springgubbe</div>
+      <hr style={{width:'100%'}}/>
+      <div style={{fontFamily:'Nunito',fontWeight:800,fontSize:'.95rem',color:'#2563EB'}}>{msg}</div>
+      <RunnerSVG speed={res.speed}/>
+    </div>
+  );
+}
+
+function DistanceCard({res,delay}){
+  const {v,u}=fmtDist(res.distM);
+  return(
+    <div className="bounce-in card" style={{background:'#F5F3FF',border:'4px solid #C4B5FD',animationDelay:`${delay}ms`}}>
+      <div className="card-title" style={{color:'#5B21B6'}}>📍 Distans</div>
+      <hr/>
+      <div style={{fontFamily:'Nunito',fontWeight:700,color:'#7C3AED',fontSize:'.9rem'}}>Du kan springa...</div>
+      <div style={{fontFamily:'Fredoka,cursive',fontSize:'2.8rem',color:'#6D28D9',lineHeight:1}}>{v}</div>
+      <div style={{fontFamily:'Nunito',fontWeight:800,color:'#7C3AED'}}>{u}</div>
+      <div style={{background:'#EDE9FE',borderRadius:14,padding:'10px 14px',marginTop:4}}>
+        <div style={{fontFamily:'Nunito',fontSize:'.85rem',color:'#5B21B6'}}>
+          🗺️ Ungefär till:<br/>
+          <b style={{color:'#4C1D95'}}>{res.place}</b>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SugarCard({res,delay}){
+  const st=status(res.sug,.001,res.sugMax);
+  return(
+    <div className="bounce-in card" style={{background:'#FFF1F2',border:'4px solid #FDA4AF',animationDelay:`${delay}ms`}}>
+      <div className="card-title" style={{color:'#9F1239'}}>🍬 Socker</div>
+      <hr/>
+      <div style={{fontFamily:'Nunito',fontWeight:800,fontSize:'1rem',color:st.color}}>{st.text}</div>
+      <div style={{fontFamily:'Nunito',fontWeight:700,color:'#BE123C',fontSize:'.85rem'}}>
+        {Math.round(res.sug*10)/10} g / max {res.sugMax} g
+      </div>
+      <SugarCubesSVG consumedG={res.sug} maxG={res.sugMax}/>
+    </div>
+  );
+}
+
+function FatCard({res,delay}){
+  const st=status(res.fat,res.fatMin,res.fatMax);
+  return(
+    <div className="bounce-in card" style={{background:'#FFF7ED',border:'4px solid #FDBA74',animationDelay:`${delay}ms`,alignItems:'center'}}>
+      <div className="card-title" style={{color:'#9A3412'}}>🧈 Fett</div>
+      <hr style={{width:'100%'}}/>
+      <div style={{fontFamily:'Nunito',fontWeight:800,fontSize:'1rem',color:st.color}}>{st.text}</div>
+      <CircleChart value={res.fat} lo={res.fatMin} hi={res.fatMax} color="#F97316"/>
+      <div style={{fontFamily:'Nunito',fontSize:'.78rem',color:'#EA580C',textAlign:'center'}}>
+        Dagsbudget: {res.fatMinD}–{res.fatMaxD} g
+      </div>
+    </div>
+  );
+}
+
+function ProteinCard({res,delay}){
+  const st=status(res.prot,res.proMin,res.proMax);
+  return(
+    <div className="bounce-in card" style={{background:'#EFF6FF',border:'4px solid #93C5FD',animationDelay:`${delay}ms`,alignItems:'center'}}>
+      <div className="card-title" style={{color:'#1E3A8A'}}>💪 Protein</div>
+      <hr style={{width:'100%'}}/>
+      <div style={{fontFamily:'Nunito',fontWeight:800,fontSize:'1rem',color:st.color}}>{st.text}</div>
+      <CircleChart value={res.prot} lo={res.proMin} hi={res.proMax} color="#3B82F6"/>
+      <div style={{fontFamily:'Nunito',fontSize:'.78rem',color:'#2563EB',textAlign:'center'}}>
+        Dagsbudget: {res.proMinD}–{res.proMaxD} g
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MAIN APP
+═══════════════════════════════════════════════════════════════ */
+function App(){
+  const [foods]=useState(()=>typeof FULL_FOODS!=='undefined'?{...BASE_FOODS,...FULL_FOODS}:BASE_FOODS);
+  const [stage,setStage]=useState('gender');
+  const [gender,setGender]=useState(null);
+  const [age,setAge]=useState(10);
+  const [ageInput,setAgeInput]=useState('10');
+  const [foodList,setFoodList]=useState([]);
+  const [results,setResults]=useState(null);
+  const [scan,setScan]=useState('');
+  const [lastAdded,setLastAdded]=useState(null);
+  const [error,setError]=useState(null);
+  const [confetti,setConfetti]=useState(false);
+  const [timer,setTimer]=useState(60);
+  const [timerOn,setTimerOn]=useState(false);
+  const inputRef=useRef(null);
+  const timerRef=useRef(null);
+
+
+  /* Auto-reset timer */
+  useEffect(()=>{
+    if(!timerOn){clearInterval(timerRef.current);return;}
+    timerRef.current=setInterval(()=>setTimer(t=>{
+      if(t<=1){doReset();return 60;}
+      return t-1;
+    }),1000);
+    return()=>clearInterval(timerRef.current);
+  },[timerOn]);
+
+  const resetTimer=useCallback(()=>setTimer(60),[]);
+
+  function doReset(){
+    setStage('gender');setGender(null);setAge(10);setAgeInput('10');
+    setFoodList([]);setResults(null);setScan('');
+    setLastAdded(null);setError(null);setConfetti(false);
+    setTimerOn(false);setTimer(60);
+  }
+
+  function pickGender(g){
+    setGender(g);setStage('age');resetTimer();setTimerOn(true);
+  }
+
+  function confirmAge(){
+    const n=parseInt(ageInput,10);
+    if(!isNaN(n)&&n>=1&&n<=120){setAge(n);setStage('food');resetTimer();setTimeout(()=>inputRef.current?.focus(),80);}
+  }
+
+  function doCalc(){
+    if(!foodList.length){setError('Scanna minst ett livsmedel! 🍽️');return;}
+    const r=calcResults(foods,foodList,age,gender);
+    setResults(r);setStage('results');setConfetti(true);
+    setTimeout(()=>setConfetti(false),4500);resetTimer();
+  }
+
+  function handleScanChange(e){
+    const val=e.target.value;
+    setScan(val);resetTimer();
+    const key=val.trim().toLowerCase();
+    if(key==='reset'){doReset();return;}
+    if(key==='berakna'||key==='finish'){doCalc();setScan('');return;}
+    if(foods[key]){
+      setFoodList(p=>[...p,key]);
+      setLastAdded(key);setError(null);setScan('');
+      setTimeout(()=>inputRef.current?.focus(),40);
+    }
+  }
+
+  function handleScanSubmit(e){
+    e.preventDefault();
+    const key=scan.trim().toLowerCase();
+    if(!key)return;
+    if(key==='reset'){doReset();return;}
+    if(key==='berakna'||key==='finish'){doCalc();setScan('');return;}
+    if(foods[key]){
+      setFoodList(p=>[...p,key]);setLastAdded(key);setError(null);
+    } else {
+      setError(`Hittades inte: "${key}" — försök igen!`);
+    }
+    setScan('');
+    setTimeout(()=>inputRef.current?.focus(),40);
+  }
+
+  const STEPS=[
+    {id:'gender',icon:'👤',label:'Vem är du?'},
+    {id:'age',   icon:'🔢',label:'Ålder'},
+    {id:'food',  icon:'🍎',label:'Frukost'},
+    {id:'results',icon:'✨',label:'Resultat'},
+  ];
+  const stepIdx=STEPS.findIndex(s=>s.id===stage);
+
+  const BASE_BTN={
+    border:'none',borderRadius:20,cursor:'pointer',
+    fontFamily:'Fredoka,cursive',fontSize:'1.25rem',
+    padding:'14px 28px',transition:'transform .12s, box-shadow .12s',
+  };
+
+  return(
+    <div style={{minHeight:'100vh',display:'flex',flexDirection:'column'}} onClick={resetTimer}>
+      <Confetti active={confetti}/>
+
+      {/* ── HEADER ── */}
+      <div style={{background:'white',borderBottom:'4px solid #FCD34D',padding:'12px 24px',
+        display:'flex',alignItems:'center',justifyContent:'space-between',boxShadow:'0 2px 8px rgba(0,0,0,.06)'}}>
+        <div style={{fontFamily:'Fredoka,cursive',fontSize:'1.9rem',color:'#B45309'}}>
+          🍳 Frukostdatorn
+        </div>
+        <div style={{display:'flex',gap:8}}>
+          {STEPS.map((s,i)=>(
+            <div key={s.id} style={{
+              display:'flex',alignItems:'center',gap:6,padding:'6px 14px',
+              borderRadius:999,fontSize:'.82rem',fontFamily:'Nunito,sans-serif',fontWeight:700,
+              transition:'all .2s',
+              background:i===stepIdx?'#FCD34D':i<stepIdx?'#D1FAE5':'#F3F4F6',
+              color:i===stepIdx?'#78350F':i<stepIdx?'#065F46':'#9CA3AF',
+              transform:i===stepIdx?'scale(1.08)':'scale(1)',
+            }}>
+              <span>{s.icon}</span>
+              <span style={{display:'none'}}>{s.label}</span>
+            </div>
+          ))}
+        </div>
+        {timerOn&&stage!=='results'&&(
+          <div style={{fontFamily:'Nunito',fontSize:'.78rem',color:'#9CA3AF'}}>
+            Auto-reset om {timer}s
+          </div>
+        )}
+      </div>
+
+      {/* Timer strip */}
+      {timerOn&&(
+        <div style={{height:4,background:'#F3F4F6'}}>
+          <div style={{height:'100%',background:'#FCD34D',width:`${(timer/60)*100}%`,transition:'width 1s linear'}}/>
+        </div>
+      )}
+
+      {/* ── CONTENT ── */}
+      <div style={{flex:1,padding:'32px 24px',maxWidth:1100,margin:'0 auto',width:'100%'}}>
+
+        {/* GENDER */}
+        {stage==='gender'&&(
+          <div className="slide-up" style={{display:'flex',flexDirection:'column',alignItems:'center',gap:32,paddingTop:16}}>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontFamily:'Fredoka,cursive',fontSize:'3.2rem',color:'#1C1917'}}>Hej! 👋</div>
+              <div style={{fontFamily:'Nunito',fontSize:'1.15rem',color:'#78716C',marginTop:4}}>Vem är du?</div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16,width:'100%',maxWidth:520}}>
+              {[
+                {g:'man',    e:'🧒',l:'Pojke', bg:'#DBEAFE',br:'#93C5FD',tc:'#1E40AF'},
+                {g:'kvinna', e:'👧',l:'Flicka',bg:'#FCE7F3',br:'#F9A8D4',tc:'#9D174D'},
+                {g:'annan',  e:'🌈',l:'Annat', bg:'#EDE9FE',br:'#C4B5FD',tc:'#5B21B6'},
+              ].map(({g,e,l,bg,br,tc})=>(
+                <button key={g} onClick={()=>pickGender(g)}
+                  style={{background:bg,border:`4px solid ${br}`,borderRadius:28,padding:'24px 8px',
+                    display:'flex',flexDirection:'column',alignItems:'center',gap:12,
+                    fontFamily:'Fredoka,cursive',fontSize:'1.45rem',color:tc,
+                    transition:'transform .15s, box-shadow .15s',boxShadow:'0 4px 12px rgba(0,0,0,.08)'}}>
+                  <span style={{fontSize:'3.8rem'}}>{e}</span>
+                  {l}
+                </button>
+              ))}
+            </div>
+            <button onClick={()=>pickGender('annan')}
+              style={{background:'none',border:'none',color:'#A8A29E',fontFamily:'Nunito',
+                fontSize:'.9rem',textDecoration:'underline',cursor:'pointer'}}>
+              Vill ej ange
+            </button>
+          </div>
+        )}
+
+        {/* AGE */}
+        {stage==='age'&&(
+          <div className="slide-up" style={{display:'flex',flexDirection:'column',alignItems:'center',gap:28,paddingTop:16}}>
+            <div style={{fontFamily:'Fredoka,cursive',fontSize:'3rem',color:'#1C1917',textAlign:'center'}}>
+              Hur gammal är du? 🎂
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:20}}>
+              <button onClick={()=>{const n=Math.max(1,age-1);setAge(n);setAgeInput(String(n));}}
+                style={{width:60,height:60,borderRadius:'50%',background:'#FFE4E6',border:'3px solid #FDA4AF',
+                  fontFamily:'Fredoka,cursive',fontSize:'2rem',color:'#BE123C',boxShadow:'0 3px 10px rgba(0,0,0,.1)'}}>
+                −
+              </button>
+              <input type="number" value={ageInput}
+                onChange={e=>{setAgeInput(e.target.value);const n=parseInt(e.target.value,10);if(!isNaN(n))setAge(n);}}
+                onKeyDown={e=>e.key==='Enter'&&confirmAge()}
+                style={{width:140,height:140,textAlign:'center',fontFamily:'Fredoka,cursive',fontSize:'4.5rem',
+                  color:'#1C1917',background:'white',border:'4px solid #FCD34D',borderRadius:28,
+                  boxShadow:'0 6px 20px rgba(0,0,0,.1)'}}
+              />
+              <button onClick={()=>{const n=Math.min(120,age+1);setAge(n);setAgeInput(String(n));}}
+                style={{width:60,height:60,borderRadius:'50%',background:'#DCFCE7',border:'3px solid #86EFAC',
+                  fontFamily:'Fredoka,cursive',fontSize:'2rem',color:'#15803D',boxShadow:'0 3px 10px rgba(0,0,0,.1)'}}>
+                +
+              </button>
+            </div>
+            <div style={{fontFamily:'Nunito',fontSize:'1.1rem',color:'#78716C'}}>år</div>
+            <button onClick={confirmAge}
+              style={{...BASE_BTN,background:'#FCD34D',border:'4px solid #F59E0B',color:'#78350F',
+                fontSize:'1.5rem',padding:'16px 48px',boxShadow:'0 6px 18px rgba(245,158,11,.35)'}}>
+              Nästa →
+            </button>
+          </div>
+        )}
+
+        {/* FOOD */}
+        {stage==='food'&&(
+          <div className="slide-up" style={{display:'flex',flexDirection:'column',gap:20}}>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontFamily:'Fredoka,cursive',fontSize:'2.4rem',color:'#1C1917'}}>Vad åt du till frukost? 🍽️</div>
+              <div style={{fontFamily:'Nunito',fontSize:'1.05rem',color:'#78716C',marginTop:4}}>Scanna dina livsmedel med scannern!</div>
+            </div>
+            <form onSubmit={handleScanSubmit}>
+              <input ref={inputRef} type="text" value={scan} onChange={handleScanChange}
+                placeholder="📷  Scanna livsmedel..."
+                autoFocus autoComplete="off"
+                style={{width:'100%',fontFamily:'Nunito,sans-serif',fontWeight:800,fontSize:'1.25rem',
+                  border:'4px solid #FCD34D',borderRadius:18,padding:'16px 22px',background:'white',
+                  color:'#1C1917',boxShadow:'0 4px 14px rgba(0,0,0,.07)',transition:'border-color .2s'}}
+                onFocus={e=>e.target.style.borderColor='#10B981'}
+                onBlur={e=>e.target.style.borderColor='#FCD34D'}
+              />
+            </form>
+
+            {error&&(
+              <div className="fade-in" style={{background:'#FEF2F2',border:'2px solid #FECACA',borderRadius:16,
+                padding:'12px 18px',fontFamily:'Nunito',color:'#DC2626',fontWeight:700,fontSize:'.95rem'}}>
+                {error}
+              </div>
+            )}
+            {lastAdded&&!error&&(
+              <div className="fade-in" style={{background:'#F0FDF4',border:'2px solid #86EFAC',borderRadius:16,
+                padding:'12px 18px',fontFamily:'Nunito',color:'#15803D',fontWeight:800,fontSize:'.95rem'}}>
+                ✅ Tillagd: <b>{lastAdded}</b>!
+              </div>
+            )}
+
+            {foodList.length>0&&(
+              <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+                {foodList.map((f,i)=>(
+                  <span key={i} className="slide-up"
+                    style={{animationDelay:`${i*25}ms`,background:'#D1FAE5',border:'2px solid #6EE7B7',
+                      borderRadius:999,padding:'6px 16px',fontFamily:'Nunito',fontWeight:800,
+                      color:'#065F46',fontSize:'.88rem'}}>
+                    🌿 {f}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div style={{display:'flex',gap:12,marginTop:4}}>
+              <button onClick={doCalc} disabled={!foodList.length}
+                style={{flex:1,background:foodList.length?'#4ADE80':'#E5E7EB',
+                  border:`4px solid ${foodList.length?'#22C55E':'#D1D5DB'}`,
+                  borderRadius:24,padding:'16px',fontFamily:'Fredoka,cursive',
+                  fontSize:'1.5rem',color:foodList.length?'white':'#9CA3AF',
+                  cursor:foodList.length?'pointer':'not-allowed',
+                  boxShadow:foodList.length?'0 6px 18px rgba(34,197,94,.35)':'none'}}>
+                Beräkna! ✨
+              </button>
+              <button onClick={doReset}
+                style={{background:'#FEF2F2',border:'4px solid #FECACA',borderRadius:24,
+                  padding:'16px 22px',fontFamily:'Fredoka,cursive',fontSize:'1.1rem',color:'#DC2626'}}>
+                Reset
+              </button>
+            </div>
+
+            {!foodList.length&&(
+              <div style={{textAlign:'center',fontFamily:'Nunito',color:'#D1D5DB',fontSize:'.9rem'}}>
+                Inga livsmedel tillagda än
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* RESULTS */}
+        {stage==='results'&&results&&(
+          <div style={{display:'flex',flexDirection:'column',gap:24}}>
+            <div className="slide-up" style={{textAlign:'center'}}>
+              <div style={{fontFamily:'Fredoka,cursive',fontSize:'2.6rem',color:'#1C1917'}}>Din frukost! 🎉</div>
+              <div style={{fontFamily:'Nunito',color:'#78716C',marginTop:4,fontSize:'1rem'}}>
+                {foodList.length} livsmedel analyserade
+              </div>
+            </div>
+
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}>
+              <EnergyCard  res={results} delay={0}/>
+              <RunnerCard  res={results} delay={100}/>
+              <DistanceCard res={results} delay={200}/>
+              <SugarCard   res={results} delay={300}/>
+              <FatCard     res={results} delay={400}/>
+              <ProteinCard res={results} delay={500}/>
+            </div>
+
+            <div style={{display:'flex',gap:12,marginTop:4}}>
+              <button onClick={()=>{
+                  setFoodList([]);setResults(null);setLastAdded(null);
+                  setError(null);setScan('');setStage('food');resetTimer();
+                  setTimeout(()=>inputRef.current?.focus(),80);
+                }}
+                style={{flex:1,background:'#EDE9FE',border:'4px solid #C4B5FD',borderRadius:24,
+                  padding:'16px',fontFamily:'Fredoka,cursive',fontSize:'1.4rem',color:'#6D28D9',
+                  boxShadow:'0 4px 14px rgba(139,92,246,.22)'}}>
+                Ny frukost 🍎
+              </button>
+              <button onClick={doReset}
+                style={{background:'#FEF2F2',border:'4px solid #FECACA',borderRadius:24,
+                  padding:'16px 22px',fontFamily:'Fredoka,cursive',fontSize:'1.1rem',color:'#DC2626'}}>
+                Reset
+              </button>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
