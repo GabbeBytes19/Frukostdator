@@ -118,6 +118,7 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
    FOOD DATABASE  —  place frukost_livsmedel.json beside this
    file for the full Swedish database; these are fallback values.
 ═══════════════════════════════════════════════════════════════ */
+/* __FULL_FOODS_PLACEHOLDER__ */
 const BASE_FOODS = {
   "havregryn":      {Energi:379, Fett:7.0,  Protein:13.0, Socker:1.0 },
   "cornflakes":     {Energi:357, Fett:0.5,  Protein:7.0,  Socker:7.0 },
@@ -527,7 +528,7 @@ function ProteinCard({res,delay}){
    MAIN APP
 ═══════════════════════════════════════════════════════════════ */
 function App(){
-  const [foods,setFoods]=useState(BASE_FOODS);
+  const [foods]=useState(()=>typeof FULL_FOODS!=='undefined'?{...BASE_FOODS,...FULL_FOODS}:BASE_FOODS);
   const [stage,setStage]=useState('gender');
   const [gender,setGender]=useState(null);
   const [age,setAge]=useState(10);
@@ -543,11 +544,6 @@ function App(){
   const inputRef=useRef(null);
   const timerRef=useRef(null);
 
-  /* Load full JSON if available */
-  useEffect(()=>{
-    fetch('./frukost_livsmedel.json').then(r=>r.json())
-      .then(d=>setFoods(prev=>({...prev,...d}))).catch(()=>{});
-  },[]);
 
   /* Auto-reset timer */
   useEffect(()=>{
