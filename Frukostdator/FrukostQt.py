@@ -332,66 +332,97 @@ class SugarWidget(QWidget):
         cC = self.consumed_g / G
         mC = self.max_g / G
         COLS = min(int(total), 10)
-        CUBE = min(26, (w - 30) / COLS - 4)
-        GAP = 4
-        D = CUBE * 0.30
-        bx = (w - (COLS * (CUBE + GAP) - GAP)) / 2
-        by = D + 10
+        CUBE = min(26, (w - 40) / COLS - 5)
+        GAP  = 5
+        D    = CUBE * 0.48   # pronounced isometric depth
+        step_x = CUBE + GAP + D * 0.62
+        step_y = CUBE + GAP + D * 0.38
+        bx   = (w - (COLS * step_x - GAP)) / 2
+        by   = D * 0.55 + 12
 
         for i in range(math.ceil(total)):
             col = i % COLS
             row = i // COLS
-            cx = bx + col * (CUBE + GAP)
-            cy = by + row * (CUBE + GAP + D * 0.25)
-            if i < cC:
-                f, t, s = (
-                    (QColor(SUGAR_OK), QColor("#86EFAC"), QColor("#15803D"))
-                    if i < mC
-                    else (QColor(RED), QColor("#FCA5A5"), QColor("#B91C1C"))
-                )
-            else:
-                f, t, s = QColor("#E5E7EB"), QColor("#F3F4F6"), QColor("#D1D5DB")
+            cx  = bx + col * step_x
+            cy  = by + row * step_y
 
+            if i < cC:
+                if i < mC:
+                    c_front  = QColor("#FAFAFA")
+                    c_top    = QColor("#DBEAFE")
+                    c_side   = QColor("#93C5FD")
+                    c_border = QColor("#BFDBFE")
+                    c_dot    = QColor(148, 163, 184, 110)
+                else:
+                    c_front  = QColor("#FEE2E2")
+                    c_top    = QColor("#FECACA")
+                    c_side   = QColor("#F87171")
+                    c_border = QColor("#FCA5A5")
+                    c_dot    = QColor(220, 100, 100, 110)
+            else:
+                c_front  = QColor("#F8FAFC")
+                c_top    = QColor("#E2E8F0")
+                c_side   = QColor("#CBD5E1")
+                c_border = QColor("#E2E8F0")
+                c_dot    = QColor(180, 192, 204, 70)
+
+            # drop shadow
             p.setPen(Qt.NoPen)
-            p.setBrush(QColor(0, 0, 0, 28))
-            p.drawRect(QRectF(cx + 3, cy + 3, CUBE, CUBE))
-            p.setBrush(f)
-            p.drawRoundedRect(QRectF(cx, cy, CUBE, CUBE), 2, 2)
-            p.setBrush(t)
-            p.drawPolygon(
-                QPolygonF(
-                    [
-                        QPointF(cx, cy),
-                        QPointF(cx + CUBE, cy),
-                        QPointF(cx + CUBE + D * 0.7, cy - D * 0.5),
-                        QPointF(cx + D * 0.7, cy - D * 0.5),
-                    ]
-                )
-            )
-            p.setBrush(s)
-            p.drawPolygon(
-                QPolygonF(
-                    [
-                        QPointF(cx + CUBE, cy),
-                        QPointF(cx + CUBE + D * 0.7, cy - D * 0.5),
-                        QPointF(cx + CUBE + D * 0.7, cy + CUBE - D * 0.5),
-                        QPointF(cx + CUBE, cy + CUBE),
-                    ]
-                )
-            )
-            p.setBrush(QColor(255, 255, 255, 55))
-            p.drawRoundedRect(QRectF(cx + 2, cy + 3, CUBE - 4, 4), 1, 1)
+            p.setBrush(QColor(0, 0, 0, 18))
+            p.drawPolygon(QPolygonF([
+                QPointF(cx + 3, cy + 3),
+                QPointF(cx + CUBE + 3, cy + 3),
+                QPointF(cx + CUBE + D * 0.62 + 3, cy - D * 0.38 + 3),
+                QPointF(cx + D * 0.62 + 3, cy - D * 0.38 + 3),
+            ]))
+
+            # right side face (darkest)
+            p.setBrush(c_side)
+            p.setPen(QPen(c_border, 0.6))
+            p.drawPolygon(QPolygonF([
+                QPointF(cx + CUBE,              cy),
+                QPointF(cx + CUBE + D * 0.62,   cy - D * 0.38),
+                QPointF(cx + CUBE + D * 0.62,   cy + CUBE - D * 0.38),
+                QPointF(cx + CUBE,              cy + CUBE),
+            ]))
+
+            # top face (medium light)
+            p.setBrush(c_top)
+            p.setPen(QPen(c_border, 0.6))
+            p.drawPolygon(QPolygonF([
+                QPointF(cx,               cy),
+                QPointF(cx + CUBE,        cy),
+                QPointF(cx + CUBE + D * 0.62, cy - D * 0.38),
+                QPointF(cx + D * 0.62,    cy - D * 0.38),
+            ]))
+
+            # front face
+            p.setBrush(c_front)
+            p.setPen(QPen(c_border, 0.6))
+            p.drawRect(QRectF(cx, cy, CUBE, CUBE))
+
+            # sugar crystal dots on front face
+            p.setPen(Qt.NoPen)
+            p.setBrush(c_dot)
+            dr = max(1.2, CUBE * 0.065)
+            for fdx, fdy in [(0.22, 0.22), (0.72, 0.22), (0.22, 0.72),
+                              (0.72, 0.72), (0.47, 0.47)]:
+                p.drawEllipse(QRectF(
+                    cx + fdx * CUBE - dr, cy + fdy * CUBE - dr, dr * 2, dr * 2
+                ))
+
+            # bright highlight on top-front edge
+            p.setPen(QPen(QColor(255, 255, 255, 200), 1.2))
+            p.drawLine(QPointF(cx, cy), QPointF(cx + CUBE, cy))
 
         # MAX dashed line
         mRow = int(mC) // COLS
-        ly = by + mRow * (CUBE + GAP + D * 0.25) - D * 0.4 - 3
-        pen = QPen(QColor(RED), 2.2)
+        ly   = by + mRow * step_y - D * 0.38 - 4
+        pen  = QPen(QColor(RED), 2.2)
         pen.setDashPattern([6, 3])
         p.setPen(pen)
         p.drawLine(QPointF(8, ly), QPointF(w - 8, ly))
-        f2 = QFont()
-        f2.setBold(True)
-        f2.setPointSize(9)
+        f2 = QFont(); f2.setBold(True); f2.setPointSize(9)
         p.setFont(f2)
         p.setPen(QColor(RED))
         p.drawText(QRectF(w - 38, ly - 15, 34, 13), Qt.AlignRight, "MAX")
@@ -462,11 +493,11 @@ class CircleWidget(QWidget):
         p.setFont(fb)
         badge = f"{round(pct * 100)}%"
         bw = QFontMetrics(fb).horizontalAdvance(badge) + 16
-        bh = 20
+        bh = 22
         bx = cx - bw // 2
-        by = cy + inn - 10
-        p.setBrush(QColor(arc_col.red(), arc_col.green(), arc_col.blue(), 40))
-        p.setPen(Qt.NoPen)
+        by = cy + inn - 12
+        p.setBrush(Qt.white)
+        p.setPen(QPen(arc_col, 1.8))
         p.drawRoundedRect(QRectF(bx, by, bw, bh), bh // 2, bh // 2)
         p.setPen(arc_col)
         p.drawText(QRectF(bx, by, bw, bh), Qt.AlignCenter, badge)
