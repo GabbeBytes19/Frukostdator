@@ -13,11 +13,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, QRectF, QPointF, QRect, QPoint, QSize, pyqtSignal
 from PyQt5.QtGui import (
     QPainter, QColor, QFont, QFontMetrics, QPen,
-    QPainterPath, QPolygonF, QPixmap, QIcon,
+    QPainterPath, QPolygonF,
 )
-import os
-
-ICON_PATH = os.path.join(os.path.dirname(__file__), "kameleont.png")
 
 import Frukostdator
 import destinations
@@ -107,7 +104,7 @@ def calc(foods, food_list, age, gender):
         pro_min_d=round(daily*.10/4),    pro_max_d=round(daily*.20/4),
         sug_max=round(daily*.10/4*.25),
         dist_km=dk, dist_m=dk*1000, place=nearest_place(dk),
-        speed=0.03 if kcal < round(daily*.20) else (0.10 if kcal <= daily else 0.26),
+        speed=1.1 if kcal < round(daily*.20) else (.55 if kcal <= daily else .27),
     )
 
 # ── UI helpers ────────────────────────────────────────────────────────────
@@ -155,7 +152,7 @@ class RunnerWidget(QWidget):
         self._tmr.start(33)
 
     def set_speed(self, spd):
-        self.dt = spd  # spd IS the dt step: higher = faster
+        self.dt = 0.09 * (0.55 / max(spd, 0.1))
 
     def _tick(self):
         self.t = (self.t + self.dt) % (2 * math.pi)
@@ -394,19 +391,20 @@ class GenderPage(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(80, 50, 80, 50); root.setSpacing(30)
 
-        root.addWidget(lbl("Hej! 👋  Vem är du?", 34, True, DARK, Qt.AlignCenter))
+        root.addWidget(lbl("Hej! Vem är du?", 34, True, DARK, Qt.AlignCenter))
         root.addWidget(lbl("Scanna din könkod", 16, False, MUTED, Qt.AlignCenter))
 
         cards = QHBoxLayout(); cards.setSpacing(20)
         for emoji, label, bg, border in [
-            ("🧒", "Pojke",  BLUE_L,  BLUE_B),
+            ("🧒", "Pojke",  BLUE_L,    BLUE_B),
             ("👧", "Flicka", "#FCE7F3", "#F9A8D4"),
-            ("✨", "Annat",  VIOLET_L, VIOLET_B),
+            ("",   "Annat",  VIOLET_L,  VIOLET_B),
         ]:
             c = make_card(bg, border)
             v = QVBoxLayout(c); v.setContentsMargins(20, 22, 20, 22); v.setSpacing(8)
-            v.addWidget(lbl(emoji, 54, False, DARK, Qt.AlignCenter))
-            v.addWidget(lbl(label, 22, True,  DARK, Qt.AlignCenter))
+            if emoji:
+                v.addWidget(lbl(emoji, 54, False, DARK, Qt.AlignCenter))
+            v.addWidget(lbl(label, 28, True, DARK, Qt.AlignCenter))
             c.setMinimumHeight(170)
             cards.addWidget(c)
         root.addLayout(cards)
@@ -545,7 +543,7 @@ class FoodPage(QWidget):
         self._inp.clear()
         self._fb.setStyleSheet(f"color:{GREEN};background:transparent;")
         self._fb.setText(f"✅  Tillagd: {key}!")
-        chip = QLabel(key)
+        chip = QLabel(f"🌿 {key}")
         chip.setStyleSheet(f"""QLabel{{background:{GREEN_L};border:2px solid {GREEN_B};
             border-radius:13px;padding:5px 13px;color:#065F46;font-weight:bold;font-size:13px;}}""")
         self._flow.addWidget(chip)
@@ -684,8 +682,6 @@ class MainWindow(QWidget):
         super().__init__()
         self.setWindowTitle("Frukostdatorn")
         self.setStyleSheet(f"QWidget{{background:{BG};}}")
-        if os.path.exists(ICON_PATH):
-            self.setWindowIcon(QIcon(ICON_PATH))
         self._gender = None
         self._age    = None
         self._tsec   = 60
@@ -699,14 +695,7 @@ class MainWindow(QWidget):
         hdr.setFixedHeight(62)
         hdr.setStyleSheet("background:white;border-bottom:4px solid #FCD34D;")
         hl = QHBoxLayout(hdr); hl.setContentsMargins(24, 0, 24, 0)
-        if os.path.exists(ICON_PATH):
-            icon_lbl = QLabel()
-            pix = QPixmap(ICON_PATH).scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            icon_lbl.setPixmap(pix)
-            icon_lbl.setStyleSheet("background:transparent;")
-            hl.addWidget(icon_lbl)
-            hl.addSpacing(8)
-        hl.addWidget(lbl("Frukostdatorn", 20, True, AMBER))
+        hl.addWidget(lbl("🍳 Frukostdatorn", 20, True, AMBER))
         hl.addStretch()
         self._step_labels = []
         for s in ("👤 Vem", "🔢 Ålder", "🍎 Frukost", "✨ Resultat"):
