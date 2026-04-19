@@ -382,7 +382,7 @@ class SugarWidget(QWidget):
         # Draw cubes bottom→top (painter's algorithm)
         for i in range(total):
             top_y  = base_y - (i + 1) * CUBE
-            filled  = i < cC
+            filled  = (i + 1) <= cC   # whole cubes only — 9g = 2 cubes, not 3
             allowed = i < mC
             if filled and allowed:
                 draw_cube(top_y,
@@ -440,7 +440,7 @@ class CircleWidget(QWidget):
         self.lo = lo
         self.hi = hi
         self.color = QColor(color)
-        self.setFixedSize(155, 155)
+        self.setFixedSize(165, 165)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
     def paintEvent(self, _):
@@ -470,36 +470,45 @@ class CircleWidget(QWidget):
         p.setBrush(QColor(arc_col.red(), arc_col.green(), arc_col.blue(), 15))
         p.drawEllipse(QRectF(cx - inn, cy - inn, inn * 2, inn * 2))
 
-        fv = QFont()
-        fv.setBold(True)
-        fv.setPointSize(15)
+        # --- value (big number) in upper zone ---
+        fv = QFont(); fv.setBold(True); fv.setPointSize(14)
         p.setFont(fv)
+        fm_v = QFontMetrics(fv)
+        val_str = f"{round(self.value, 1)}g"
+        # shrink if it would overflow the inner diameter
+        while fm_v.horizontalAdvance(val_str) > inn * 2 - 8 and fv.pointSize() > 8:
+            fv.setPointSize(fv.pointSize() - 1)
+            p.setFont(fv)
+            fm_v = QFontMetrics(fv)
+        val_h = fm_v.height()
         p.setPen(QColor(DARK))
         p.drawText(
-            QRectF(cx - inn, cy - inn - 4, inn * 2, inn),
-            Qt.AlignHCenter | Qt.AlignBottom,
-            f"{round(self.value, 1)}g",
+            QRectF(cx - inn, cy - inn + 6, inn * 2, val_h),
+            Qt.AlignHCenter | Qt.AlignVCenter,
+            val_str,
         )
 
-        fs = QFont()
-        fs.setPointSize(9)
+        # --- range text in middle ---
+        fs = QFont(); fs.setPointSize(9)
         p.setFont(fs)
+        fm_s = QFontMetrics(fs)
+        range_h = fm_s.height()
+        range_y = cy - inn + 6 + val_h + 4
         p.setPen(QColor(MUTED))
         p.drawText(
-            QRectF(cx - inn, cy + 2, inn * 2, inn),
-            Qt.AlignHCenter | Qt.AlignTop,
+            QRectF(cx - inn, range_y, inn * 2, range_h),
+            Qt.AlignHCenter | Qt.AlignVCenter,
             f"{round(self.lo)}–{round(self.hi)} g",
         )
 
-        fb = QFont()
-        fb.setBold(True)
-        fb.setPointSize(10)
+        # --- % badge pinned to bottom of inner circle ---
+        fb = QFont(); fb.setBold(True); fb.setPointSize(10)
         p.setFont(fb)
         badge = f"{round(pct * 100)}%"
         bw = QFontMetrics(fb).horizontalAdvance(badge) + 16
-        bh = 22
+        bh = 20
         bx = cx - bw // 2
-        by = cy + inn - 12
+        by = cy + inn - bh - 5          # 5 px margin from inner circle edge
         p.setBrush(Qt.white)
         p.setPen(QPen(arc_col, 1.8))
         p.drawRoundedRect(QRectF(bx, by, bw, bh), bh // 2, bh // 2)
