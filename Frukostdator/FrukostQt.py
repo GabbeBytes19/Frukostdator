@@ -320,7 +320,7 @@ class SugarWidget(QWidget):
         super().__init__(parent)
         self.consumed_g = consumed_g
         self.max_g = max_g
-        self.setMinimumHeight(170)
+        self.setMinimumHeight(180)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
     def paintEvent(self, _):
@@ -328,103 +328,108 @@ class SugarWidget(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
 
-        G    = 4.0                          # 4 g sugar = 1 cube (real sugar cube)
-        cC   = self.consumed_g / G          # cubes consumed (float)
-        mC   = self.max_g / G               # cubes at max (float)
-        n_max  = max(1, math.ceil(mC))      # integer slots allowed
-        n_cons = math.ceil(cC)              # integer consumed
-        total  = max(n_max, n_cons)         # total cubes to draw
+        G      = 4.0
+        cC     = self.consumed_g / G   # float cubes consumed
+        mC     = self.max_g / G        # float cubes at max
+        n_max  = max(1, math.ceil(mC))
+        n_cons = math.ceil(cC)
+        total  = max(n_max, n_cons, 1)
 
-        # Size cubes so they fit in one row
-        CUBE = min(28, (w - 60) / (total + 0.7) - 4)
-        D    = CUBE * 0.46
-        GAP  = 4
-        step = CUBE + GAP + D * 0.58
-        bx   = (w - (total * step - GAP + D * 0.58)) / 2
-        by   = D * 0.45 + 28              # extra top margin for MAX label
+        # Leave room: top for MAX label, bottom for unit label
+        LBL_H  = 18
+        TOP_M  = 28
+        BOT_M  = LBL_H + 6
+        D_FRAC = 0.44            # isometric depth fraction
+        # CUBE height so stack fits vertically
+        usable = h - TOP_M - BOT_M
+        CUBE   = max(10, min(32, usable / total - 1))
+        D      = CUBE * D_FRAC
 
-        def draw_cube(cx, cy, c_front, c_top, c_side, c_border, c_dot):
-            p.setPen(Qt.NoPen)
-            p.setBrush(QColor(0, 0, 0, 16))
+        # Horizontal layout: stack centred, MAX label fits to the right
+        stack_w = CUBE + D * 0.58
+        cx      = (w - stack_w) / 2 - 10   # shift left slightly for MAX text
+        base_y  = h - BOT_M                # bottom of the lowest cube
+
+        def draw_cube(top_y, c_front, c_top, c_side, c_border, c_dot):
+            # right side face
+            p.setBrush(c_side); p.setPen(QPen(c_border, 0.7))
             p.drawPolygon(QPolygonF([
-                QPointF(cx + 3, cy + 3),
-                QPointF(cx + CUBE + 3, cy + 3),
-                QPointF(cx + CUBE + D*0.58 + 3, cy - D*0.42 + 3),
-                QPointF(cx + D*0.58 + 3,        cy - D*0.42 + 3),
+                QPointF(cx + CUBE,          top_y),
+                QPointF(cx + CUBE + D*0.58, top_y - D*0.42),
+                QPointF(cx + CUBE + D*0.58, top_y + CUBE - D*0.42),
+                QPointF(cx + CUBE,          top_y + CUBE),
             ]))
-            p.setBrush(c_side); p.setPen(QPen(c_border, 0.6))
-            p.drawPolygon(QPolygonF([
-                QPointF(cx + CUBE,           cy),
-                QPointF(cx + CUBE + D*0.58,  cy - D*0.42),
-                QPointF(cx + CUBE + D*0.58,  cy + CUBE - D*0.42),
-                QPointF(cx + CUBE,           cy + CUBE),
-            ]))
+            # top face
             p.setBrush(c_top)
             p.drawPolygon(QPolygonF([
-                QPointF(cx,              cy),
-                QPointF(cx + CUBE,       cy),
-                QPointF(cx + CUBE + D*0.58, cy - D*0.42),
-                QPointF(cx + D*0.58,     cy - D*0.42),
+                QPointF(cx,              top_y),
+                QPointF(cx + CUBE,       top_y),
+                QPointF(cx + CUBE+D*0.58,top_y - D*0.42),
+                QPointF(cx + D*0.58,     top_y - D*0.42),
             ]))
-            p.setBrush(c_front); p.setPen(QPen(c_border, 0.6))
-            p.drawRect(QRectF(cx, cy, CUBE, CUBE))
+            # front face
+            p.setBrush(c_front); p.setPen(QPen(c_border, 0.7))
+            p.drawRect(QRectF(cx, top_y, CUBE, CUBE))
+            # crystal dots
             p.setPen(Qt.NoPen); p.setBrush(c_dot)
-            dr = max(1.2, CUBE * 0.065)
-            for fdx, fdy in [(0.22,0.22),(0.72,0.22),(0.22,0.72),(0.72,0.72),(0.47,0.47)]:
-                p.drawEllipse(QRectF(cx+fdx*CUBE-dr, cy+fdy*CUBE-dr, dr*2, dr*2))
-            p.setPen(QPen(QColor(255,255,255,200), 1.2))
-            p.drawLine(QPointF(cx, cy), QPointF(cx + CUBE, cy))
+            dr = max(1.0, CUBE * 0.07)
+            for fdx, fdy in [(0.22,0.25),(0.72,0.25),(0.22,0.72),(0.72,0.72),(0.47,0.48)]:
+                p.drawEllipse(QRectF(cx+fdx*CUBE-dr, top_y+fdy*CUBE-dr, dr*2, dr*2))
+            # highlight
+            p.setPen(QPen(QColor(255,255,255,210), 1.2))
+            p.drawLine(QPointF(cx, top_y), QPointF(cx + CUBE, top_y))
 
+        # Draw cubes bottom→top (painter's algorithm)
         for i in range(total):
-            cx = bx + i * step
-            cy = by
+            top_y  = base_y - (i + 1) * CUBE
             filled  = i < cC
             allowed = i < mC
             if filled and allowed:
-                draw_cube(cx, cy,
+                draw_cube(top_y,
                     QColor("#FAFAFA"), QColor("#DBEAFE"),
                     QColor("#93C5FD"), QColor("#BFDBFE"),
-                    QColor(148, 163, 184, 110))
-            elif filled:          # over max → red
-                draw_cube(cx, cy,
+                    QColor(148, 163, 184, 100))
+            elif filled:
+                draw_cube(top_y,
                     QColor("#FEE2E2"), QColor("#FECACA"),
                     QColor("#F87171"), QColor("#FCA5A5"),
                     QColor(220, 80, 80, 120))
-            else:                 # empty slot
-                draw_cube(cx, cy,
+            else:
+                draw_cube(top_y,
                     QColor("#F1F5F9"), QColor("#E2E8F0"),
                     QColor("#CBD5E1"), QColor("#E2E8F0"),
-                    QColor(180, 192, 204, 60))
+                    QColor(180, 192, 204, 55))
 
-        # ── MAX separator line ────────────────────────────────────────────
-        sep_x = bx + n_max * step - GAP * 0.5
-        top_y = by - D * 0.42 - 18
-        bot_y = by + CUBE + 6
-        p.setPen(QPen(QColor(RED), 3.0))
-        p.drawLine(QPointF(sep_x, top_y), QPointF(sep_x, bot_y))
+        # ── MAX horizontal line at exact fractional height ────────────────
+        max_y  = base_y - mC * CUBE
+        line_x1 = cx - 6
+        line_x2 = cx + CUBE + D * 0.58 + 6
+        p.setPen(QPen(QColor(RED), 2.8))
+        p.drawLine(QPointF(line_x1, max_y), QPointF(line_x2, max_y))
 
-        # Arrow head pointing down into the line
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor(RED))
-        p.drawPolygon(QPolygonF([
-            QPointF(sep_x - 5, top_y + 1),
-            QPointF(sep_x + 5, top_y + 1),
-            QPointF(sep_x,     top_y + 9),
-        ]))
+        # Arrow tips on both ends
+        p.setPen(Qt.NoPen); p.setBrush(QColor(RED))
+        for ax in (line_x1, line_x2):
+            sign = -1 if ax == line_x1 else 1
+            p.drawPolygon(QPolygonF([
+                QPointF(ax,          max_y - 4),
+                QPointF(ax,          max_y + 4),
+                QPointF(ax + sign*7, max_y),
+            ]))
 
-        # MAX label above arrow
+        # MAX label to the right
         fmax = QFont(); fmax.setBold(True); fmax.setPointSize(9)
         p.setFont(fmax)
         p.setPen(QColor(RED))
-        p.drawText(QRectF(sep_x - 22, top_y - 16, 44, 14),
-                   Qt.AlignCenter, "MAX")
+        p.drawText(QRectF(line_x2 + 5, max_y - 9, 38, 18),
+                   Qt.AlignVCenter | Qt.AlignLeft, "MAX")
 
-        # unit label at bottom
+        # Unit label at the very bottom
         fu = QFont(); fu.setPointSize(8)
         p.setFont(fu)
         p.setPen(QColor(MUTED))
-        p.drawText(QRectF(0, by + CUBE + 10, w, 14),
-                   Qt.AlignCenter, f"1 sockerkub = {int(G)} g socker")
+        p.drawText(QRectF(0, h - LBL_H, w, LBL_H),
+                   Qt.AlignCenter, f"1 kub = {int(G)} g socker")
 
 
 # ── Circle chart (QPainter) ───────────────────────────────────────────────
