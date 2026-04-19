@@ -445,7 +445,7 @@ class CircleWidget(QWidget):
         cx = cy = self.width() // 2
         R = cx - 12
         thick = 14
-        pct = min(self.value / self.hi, 1.5) if self.hi > 0 else 0
+        pct = (self.value / self.hi) if self.hi > 0 else 0
         arc_col = QColor(RED) if self.value > self.hi else self.color
 
         p.setPen(QPen(QColor("#F3F4F6"), thick, Qt.SolidLine, Qt.RoundCap))
