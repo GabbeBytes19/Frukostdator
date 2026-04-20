@@ -14,11 +14,9 @@ from PyQt5.QtGui import (
     QFont,
     QFontMetrics,
     QPainter,
-    QPainterPath,
     QPen,
     QPixmap,
     QPolygonF,
-    QTransform,
 )
 from PyQt5.QtWidgets import (
     QApplication,
@@ -200,9 +198,7 @@ def hline(color="#E5E7EB"):
 def make_card(bg, border):
     f = QFrame()
     f.setAttribute(Qt.WA_StyledBackground, True)
-    f.setStyleSheet(
-        f"QFrame{{background:{bg};border:4px solid {border};border-radius:20px;}}"
-    )
+    f.setStyleSheet(f"QFrame{{background:{bg};}}")
     return f
 
 
@@ -219,15 +215,49 @@ def scanner_field(placeholder, color=AMBER_B):
     return e
 
 
+_qr_cache: dict = {}
+
+
+def make_qr_pixmap(data: str, size: int = 150) -> QPixmap:
+    key = (data, size)
+    if key in _qr_cache:
+        return _qr_cache[key]
+    try:
+        import qrcode
+        from io import BytesIO
+        img = qrcode.make(data)
+        img = img.resize((size, size))
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        px = QPixmap()
+        px.loadFromData(buf.getvalue())
+    except Exception:
+        px = QPixmap(size, size)
+        px.fill(QColor("#E5E7EB"))
+    _qr_cache[key] = px
+    return px
+
+
+AGE_INTERVALS = [
+    ("0–5 år",   "age:0-5",   4),
+    ("6–9 år",   "age:6-9",   8),
+    ("10–15 år", "age:10-15", 12),
+    ("15–19 år", "age:15-19", 17),
+    ("20+ år",   "age:20+",   30),
+]
+_AGE_MAP = {code: age for _, code, age in AGE_INTERVALS}
+
+
 # ── Chameleon sprite runner ───────────────────────────────────────────────
 _CHAM_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Chameleon")
+
 
 class RunnerWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedSize(160, 130)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.dt     = 0.09   # frame-advance speed (larger = faster)
+        self.dt = 0.09  # frame-advance speed (larger = faster)
         self._frame = 0
         self._accum = 0.0
 
@@ -249,7 +279,7 @@ class RunnerWidget(QWidget):
 
     def _tick(self):
         self._accum += self.dt
-        while self._accum >= 0.09:        # advance one frame per 0.09 units accumulated
+        while self._accum >= 0.09:  # advance one frame per 0.09 units accumulated
             self._accum -= 0.09
             self._frame = (self._frame + 1) % len(self._frames)
         self.update()
@@ -261,11 +291,11 @@ class RunnerWidget(QWidget):
         p.setRenderHint(QPainter.SmoothPixmapTransform)
         w, h = self.width(), self.height()
 
-        px      = self._frames[self._frame]
-        px_w    = px.width()
-        px_h    = px.height()
-        img_x   = (w - px_w) // 2 + 10   # shift right slightly for speed lines
-        img_y   = (h - px_h) // 2
+        px = self._frames[self._frame]
+        px_w = px.width()
+        px_h = px.height()
+        img_x = (w - px_w) // 2 + 10  # shift right slightly for speed lines
+        img_y = (h - px_h) // 2
 
         # speed lines to the left — more lines at higher speed
         n_lines = 3 if self.dt > 0.14 else (2 if self.dt > 0.08 else 1)
@@ -298,100 +328,141 @@ class SugarWidget(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
 
-        G        = 4.0
-        cC       = self.consumed_g / G          # float cubes consumed
-        mC       = self.max_g / G               # float cubes at max
-        n_max    = max(1, math.ceil(mC))        # slots that fit within max
-        n_filled = max(0, math.floor(cC))       # whole cubes actually eaten
+        G = 4.0
+        cC = self.consumed_g / G  # float cubes consumed
+        mC = self.max_g / G  # float cubes at max
+        n_max = max(1, math.ceil(mC))  # slots that fit within max
+        n_filled = max(0, math.floor(cC))  # whole cubes actually eaten
 
         # Scale widget to n_max so MAX line is always in frame.
         # Only draw CONSUMED cubes — no empty outlines.
-        LBL_H  = 18
-        TOP_M  = 28
-        BOT_M  = LBL_H + 6
+        LBL_H = 18
+        TOP_M = 28
+        BOT_M = LBL_H + 6
         D_FRAC = 0.44
         usable = h - TOP_M - BOT_M
-        CUBE   = max(10, min(32, usable / n_max - 1))
-        D      = CUBE * D_FRAC
+        CUBE = max(10, min(32, usable / n_max - 1))
+        D = CUBE * D_FRAC
 
         stack_w = CUBE + D * 0.58
-        cx      = (w - stack_w) / 2 - 10
-        base_y  = h - BOT_M
+        cx = (w - stack_w) / 2 - 10
+        base_y = h - BOT_M
 
         def draw_cube(top_y, c_front, c_top, c_side, c_border, c_dot):
             # right side face
-            p.setBrush(c_side); p.setPen(QPen(c_border, 0.7))
-            p.drawPolygon(QPolygonF([
-                QPointF(cx + CUBE,          top_y),
-                QPointF(cx + CUBE + D*0.58, top_y - D*0.42),
-                QPointF(cx + CUBE + D*0.58, top_y + CUBE - D*0.42),
-                QPointF(cx + CUBE,          top_y + CUBE),
-            ]))
+            p.setBrush(c_side)
+            p.setPen(QPen(c_border, 0.7))
+            p.drawPolygon(
+                QPolygonF(
+                    [
+                        QPointF(cx + CUBE, top_y),
+                        QPointF(cx + CUBE + D * 0.58, top_y - D * 0.42),
+                        QPointF(cx + CUBE + D * 0.58, top_y + CUBE - D * 0.42),
+                        QPointF(cx + CUBE, top_y + CUBE),
+                    ]
+                )
+            )
             # top face
             p.setBrush(c_top)
-            p.drawPolygon(QPolygonF([
-                QPointF(cx,              top_y),
-                QPointF(cx + CUBE,       top_y),
-                QPointF(cx + CUBE+D*0.58,top_y - D*0.42),
-                QPointF(cx + D*0.58,     top_y - D*0.42),
-            ]))
+            p.drawPolygon(
+                QPolygonF(
+                    [
+                        QPointF(cx, top_y),
+                        QPointF(cx + CUBE, top_y),
+                        QPointF(cx + CUBE + D * 0.58, top_y - D * 0.42),
+                        QPointF(cx + D * 0.58, top_y - D * 0.42),
+                    ]
+                )
+            )
             # front face
-            p.setBrush(c_front); p.setPen(QPen(c_border, 0.7))
+            p.setBrush(c_front)
+            p.setPen(QPen(c_border, 0.7))
             p.drawRect(QRectF(cx, top_y, CUBE, CUBE))
             # crystal dots
-            p.setPen(Qt.NoPen); p.setBrush(c_dot)
+            p.setPen(Qt.NoPen)
+            p.setBrush(c_dot)
             dr = max(1.0, CUBE * 0.07)
-            for fdx, fdy in [(0.22,0.25),(0.72,0.25),(0.22,0.72),(0.72,0.72),(0.47,0.48)]:
-                p.drawEllipse(QRectF(cx+fdx*CUBE-dr, top_y+fdy*CUBE-dr, dr*2, dr*2))
+            for fdx, fdy in [
+                (0.22, 0.25),
+                (0.72, 0.25),
+                (0.22, 0.72),
+                (0.72, 0.72),
+                (0.47, 0.48),
+            ]:
+                p.drawEllipse(
+                    QRectF(
+                        cx + fdx * CUBE - dr, top_y + fdy * CUBE - dr, dr * 2, dr * 2
+                    )
+                )
             # highlight
-            p.setPen(QPen(QColor(255,255,255,210), 1.2))
+            p.setPen(QPen(QColor(255, 255, 255, 210), 1.2))
             p.drawLine(QPointF(cx, top_y), QPointF(cx + CUBE, top_y))
 
         # Draw only consumed cubes bottom→top — no empty outlines
         for i in range(n_filled):
-            top_y   = base_y - (i + 1) * CUBE
+            top_y = base_y - (i + 1) * CUBE
             allowed = i < mC
             if allowed:
-                draw_cube(top_y,
-                    QColor("#FAFAFA"), QColor("#DBEAFE"),
-                    QColor("#93C5FD"), QColor("#BFDBFE"),
-                    QColor(148, 163, 184, 100))
+                draw_cube(
+                    top_y,
+                    QColor("#FAFAFA"),
+                    QColor("#DBEAFE"),
+                    QColor("#93C5FD"),
+                    QColor("#BFDBFE"),
+                    QColor(148, 163, 184, 100),
+                )
             else:
-                draw_cube(top_y,
-                    QColor("#FEE2E2"), QColor("#FECACA"),
-                    QColor("#F87171"), QColor("#FCA5A5"),
-                    QColor(220, 80, 80, 120))
+                draw_cube(
+                    top_y,
+                    QColor("#FEE2E2"),
+                    QColor("#FECACA"),
+                    QColor("#F87171"),
+                    QColor("#FCA5A5"),
+                    QColor(220, 80, 80, 120),
+                )
 
         # ── MAX horizontal line at exact fractional height ────────────────
-        max_y  = base_y - mC * CUBE
+        max_y = base_y - mC * CUBE
         line_x1 = cx - 6
         line_x2 = cx + CUBE + D * 0.58 + 6
         p.setPen(QPen(QColor(RED), 2.8))
         p.drawLine(QPointF(line_x1, max_y), QPointF(line_x2, max_y))
 
         # Arrow tips on both ends
-        p.setPen(Qt.NoPen); p.setBrush(QColor(RED))
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(RED))
         for ax in (line_x1, line_x2):
             sign = -1 if ax == line_x1 else 1
-            p.drawPolygon(QPolygonF([
-                QPointF(ax,          max_y - 4),
-                QPointF(ax,          max_y + 4),
-                QPointF(ax + sign*7, max_y),
-            ]))
+            p.drawPolygon(
+                QPolygonF(
+                    [
+                        QPointF(ax, max_y - 4),
+                        QPointF(ax, max_y + 4),
+                        QPointF(ax + sign * 7, max_y),
+                    ]
+                )
+            )
 
         # MAX label to the right
-        fmax = QFont(); fmax.setBold(True); fmax.setPointSize(9)
+        fmax = QFont()
+        fmax.setBold(True)
+        fmax.setPointSize(9)
         p.setFont(fmax)
         p.setPen(QColor(RED))
-        p.drawText(QRectF(line_x2 + 5, max_y - 9, 38, 18),
-                   Qt.AlignVCenter | Qt.AlignLeft, "MAX")
+        p.drawText(
+            QRectF(line_x2 + 5, max_y - 9, 38, 18),
+            Qt.AlignVCenter | Qt.AlignLeft,
+            "MAX",
+        )
 
         # Unit label at the very bottom
-        fu = QFont(); fu.setPointSize(8)
+        fu = QFont()
+        fu.setPointSize(8)
         p.setFont(fu)
         p.setPen(QColor(MUTED))
-        p.drawText(QRectF(0, h - LBL_H, w, LBL_H),
-                   Qt.AlignCenter, f"1 kub = {int(G)} g socker")
+        p.drawText(
+            QRectF(0, h - LBL_H, w, LBL_H), Qt.AlignCenter, f"1 kub = {int(G)} g socker"
+        )
 
 
 # ── Circle chart (QPainter) ───────────────────────────────────────────────
@@ -433,7 +504,9 @@ class CircleWidget(QWidget):
         p.drawEllipse(QRectF(cx - inn, cy - inn, inn * 2, inn * 2))
 
         # --- value (big number) in upper zone ---
-        fv = QFont(); fv.setBold(True); fv.setPointSize(14)
+        fv = QFont()
+        fv.setBold(True)
+        fv.setPointSize(14)
         p.setFont(fv)
         fm_v = QFontMetrics(fv)
         val_str = f"{round(self.value, 1)}g"
@@ -451,7 +524,8 @@ class CircleWidget(QWidget):
         )
 
         # --- range text in middle ---
-        fs = QFont(); fs.setPointSize(9)
+        fs = QFont()
+        fs.setPointSize(9)
         p.setFont(fs)
         fm_s = QFontMetrics(fs)
         range_h = fm_s.height()
@@ -464,20 +538,20 @@ class CircleWidget(QWidget):
         )
 
         # --- % badge pinned to bottom of inner circle ---
-        fb = QFont(); fb.setBold(True); fb.setPointSize(10)
+        fb = QFont()
+        fb.setBold(True)
+        fb.setPointSize(10)
         p.setFont(fb)
         badge = f"{round(pct * 100)}%"
         bw = QFontMetrics(fb).horizontalAdvance(badge) + 16
         bh = 20
         bx = cx - bw // 2
-        by = cy + inn - bh - 5          # 5 px margin from inner circle edge
+        by = cy + inn - bh - 5  # 5 px margin from inner circle edge
         p.setBrush(Qt.white)
         p.setPen(QPen(arc_col, 1.8))
         p.drawRoundedRect(QRectF(bx, by, bw, bh), bh // 2, bh // 2)
         p.setPen(arc_col)
         p.drawText(QRectF(bx, by, bw, bh), Qt.AlignCenter, badge)
-
-
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -496,30 +570,35 @@ class GenderPage(QWidget):
         root.setSpacing(30)
 
         root.addWidget(lbl("Hej! Vem är du?", 34, True, DARK, Qt.AlignCenter))
-        root.addWidget(lbl("Scanna din könkod", 16, False, MUTED, Qt.AlignCenter))
+        root.addWidget(lbl("Scanna din könkod på skärmen", 16, False, MUTED, Qt.AlignCenter))
 
         cards_row = QHBoxLayout()
         cards_row.setSpacing(20)
         colors = [
-            (BLUE_L,      BLUE_B),
-            ("#FCE7F3",   "#F9A8D4"),
-            (VIOLET_L,    VIOLET_B),
+            (BLUE_L, BLUE_B),
+            ("#FCE7F3", "#F9A8D4"),
+            (VIOLET_L, VIOLET_B),
         ]
         self._card_emojis = []
         self._card_labels = []
+        self._card_qr = []
         for bg, border in colors:
             c = make_card(bg, border)
             v = QVBoxLayout(c)
-            v.setContentsMargins(20, 22, 20, 22)
-            v.setSpacing(8)
-            e = lbl("", 54, False, DARK, Qt.AlignCenter)
-            t = lbl("", 28, True,  DARK, Qt.AlignCenter)
+            v.setContentsMargins(20, 16, 20, 16)
+            v.setSpacing(6)
+            e = lbl("", 48, False, DARK, Qt.AlignCenter)
+            t = lbl("", 24, True, DARK, Qt.AlignCenter)
+            qr = QLabel()
+            qr.setAlignment(Qt.AlignCenter)
             v.addWidget(e)
             v.addWidget(t)
-            c.setMinimumHeight(170)
+            v.addWidget(qr)
+            c.setMinimumHeight(220)
             cards_row.addWidget(c)
             self._card_emojis.append(e)
             self._card_labels.append(t)
+            self._card_qr.append(qr)
         root.addLayout(cards_row)
 
         self._inp = scanner_field("Scanna könkod...")
@@ -533,15 +612,16 @@ class GenderPage(QWidget):
     def setup(self, age):
         self._age = age
         if age < 18:
-            opts  = [("🧒", "Pojke"), ("👧", "Flicka"), ("", "Annat")]
-            hint  = "Scanna könkod: pojke / flicka / annat"
+            opts = [("🧒", "Pojke", "pojke"), ("👧", "Flicka", "flicka"), ("", "Annat", "annat")]
+            hint = "Scanna könkod på skärmen"
         else:
-            opts  = [("👨", "Man"), ("👩", "Kvinna"), ("", "Annat")]
-            hint  = "Scanna könkod: man / kvinna / annat"
-        for i, (emoji, label) in enumerate(opts):
+            opts = [("👨", "Man", "man"), ("👩", "Kvinna", "kvinna"), ("", "Annat", "annat")]
+            hint = "Scanna könkod på skärmen"
+        for i, (emoji, label, code) in enumerate(opts):
             self._card_emojis[i].setText(emoji)
             self._card_emojis[i].setVisible(bool(emoji))
             self._card_labels[i].setText(label)
+            self._card_qr[i].setPixmap(make_qr_pixmap(code, 110))
         self._inp.setPlaceholderText(hint)
 
     def showEvent(self, _):
@@ -552,9 +632,13 @@ class GenderPage(QWidget):
         raw = self._inp.text().strip().lower()
         self._inp.clear()
         MAP = {
-            "pojke": "man", "flicka": "kvinna",
-            "man": "man",   "kvinna": "kvinna",
-            "annat": "annan", "annan": "annan", "vill ej ange": "annan",
+            "pojke": "man",
+            "flicka": "kvinna",
+            "man": "man",
+            "kvinna": "kvinna",
+            "annat": "annan",
+            "annan": "annan",
+            "vill ej ange": "annan",
         }
         if raw in MAP:
             self._err.setText("")
@@ -569,20 +653,36 @@ class AgePage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         root = QVBoxLayout(self)
-        root.setContentsMargins(80, 50, 80, 50)
-        root.setSpacing(28)
+        root.setContentsMargins(60, 40, 60, 30)
+        root.setSpacing(20)
 
         root.addWidget(lbl("Hur gammal är du? 🎂", 34, True, DARK, Qt.AlignCenter))
-        root.addWidget(lbl("Scanna din ålder", 16, False, MUTED, Qt.AlignCenter))
+        root.addWidget(lbl("Scanna din åldersgrupp på skärmen", 16, False, MUTED, Qt.AlignCenter))
 
-        self._disp = lbl("—", 88, True, AMBER, Qt.AlignCenter)
-        root.addWidget(self._disp)
-        root.addWidget(lbl("år", 18, False, MUTED, Qt.AlignCenter))
+        cards_row = QHBoxLayout()
+        cards_row.setSpacing(16)
+        card_colors = [
+            (GREEN_L, GREEN_B),
+            (BLUE_L, BLUE_B),
+            (AMBER_L, AMBER_B),
+            (VIOLET_L, VIOLET_B),
+            (ORANGE_L, ORANGE_B),
+        ]
+        for (label, code, _), (bg, border) in zip(AGE_INTERVALS, card_colors):
+            c = make_card(bg, border)
+            v = QVBoxLayout(c)
+            v.setContentsMargins(10, 14, 10, 14)
+            v.setSpacing(10)
+            v.addWidget(lbl(label, 20, True, DARK, Qt.AlignCenter))
+            qr_lbl = QLabel()
+            qr_lbl.setAlignment(Qt.AlignCenter)
+            qr_lbl.setPixmap(make_qr_pixmap(code, 140))
+            v.addWidget(qr_lbl)
+            cards_row.addWidget(c)
+        root.addLayout(cards_row)
 
-        self._inp = scanner_field("Scanna ålder (t.ex. 10)...")
-        self._inp.textChanged.connect(
-            lambda t: self._disp.setText(t if t.isdigit() else "—")
-        )
+        self._inp = scanner_field("Scanna ålderskoden på skärmen...", AMBER_B)
+        self._inp.textChanged.connect(self._live)
         self._inp.returnPressed.connect(self._submit)
         root.addWidget(self._inp)
 
@@ -592,17 +692,26 @@ class AgePage(QWidget):
 
     def showEvent(self, _):
         self._inp.clear()
-        self._disp.setText("—")
         QTimer.singleShot(80, self._inp.setFocus)
 
+    def _live(self, txt):
+        key = txt.strip().lower()
+        if key in _AGE_MAP:
+            self._inp.clear()
+            self._err.setText("")
+            self.chosen.emit(_AGE_MAP[key])
+
     def _submit(self):
-        txt = self._inp.text().strip()
+        txt = self._inp.text().strip().lower()
         self._inp.clear()
-        if txt.isdigit() and 1 <= int(txt) <= 120:
+        if txt in _AGE_MAP:
+            self._err.setText("")
+            self.chosen.emit(_AGE_MAP[txt])
+        elif txt.isdigit() and 1 <= int(txt) <= 120:
             self._err.setText("")
             self.chosen.emit(int(txt))
         else:
-            self._err.setText("Ange ålder med siffror!")
+            self._err.setText("Scanna en åldersgrupp!")
 
 
 class FoodPage(QWidget):
@@ -619,7 +728,7 @@ class FoodPage(QWidget):
         root.addWidget(lbl("Scanna din frukost! 🍽️", 30, True, DARK, Qt.AlignCenter))
         root.addWidget(
             lbl(
-                "Håll streckkoden mot scannern  ·  scanna 'berakna' när du är klar",
+                "Håll streckkoden mot scannern  ·  scanna Beräkna-koden när du är klar",
                 14,
                 False,
                 MUTED,
@@ -642,6 +751,24 @@ class FoodPage(QWidget):
             f"color:{DARK};background:transparent;font-size:15px;"
         )
         root.addWidget(self._list_lbl)
+
+        action_row = QHBoxLayout()
+        action_row.setSpacing(16)
+        for label, code, txt_col, bg, border in [
+            ("✅ Beräkna", "berakna", "#065F46", GREEN_L, GREEN_B),
+            ("↺ Börja om", "reset", "#9F1239", ROSE_L, ROSE_B),
+        ]:
+            c = make_card(bg, border)
+            v = QVBoxLayout(c)
+            v.setContentsMargins(14, 10, 14, 10)
+            v.setSpacing(6)
+            v.addWidget(lbl(label, 14, True, txt_col, Qt.AlignCenter))
+            ql = QLabel()
+            ql.setAlignment(Qt.AlignCenter)
+            ql.setPixmap(make_qr_pixmap(code, 110))
+            v.addWidget(ql)
+            action_row.addWidget(c)
+        root.addLayout(action_row)
         root.addStretch()
 
     def reset(self):
@@ -713,19 +840,28 @@ class ResultsPage(QWidget):
         self._grid.setSpacing(12)
         outer.addWidget(self._grid_w, 1)
 
-        self._inp = scanner_field("Scanna 'ny frukost' eller 'reset'...", VIOLET_B)
+        self._inp = scanner_field("Scanna koden på skärmen...", VIOLET_B)
         self._inp.textChanged.connect(self._live)
         self._inp.returnPressed.connect(self._submit)
         outer.addWidget(self._inp)
-        outer.addWidget(
-            lbl(
-                "Scanna 'ny frukost' för att mäta igen  ·  'reset' för att börja om",
-                12,
-                False,
-                MUTED,
-                Qt.AlignCenter,
-            )
-        )
+
+        action_row = QHBoxLayout()
+        action_row.setSpacing(16)
+        for label, code, txt_col, bg, border in [
+            ("🍳 Ny frukost", "ny frukost", "#065F46", GREEN_L, GREEN_B),
+            ("↺ Börja om", "reset", "#9F1239", ROSE_L, ROSE_B),
+        ]:
+            c = make_card(bg, border)
+            v = QVBoxLayout(c)
+            v.setContentsMargins(14, 10, 14, 10)
+            v.setSpacing(6)
+            v.addWidget(lbl(label, 14, True, txt_col, Qt.AlignCenter))
+            ql = QLabel()
+            ql.setAlignment(Qt.AlignCenter)
+            ql.setPixmap(make_qr_pixmap(code, 110))
+            v.addWidget(ql)
+            action_row.addWidget(c)
+        outer.addLayout(action_row)
 
     def showEvent(self, _):
         QTimer.singleShot(80, self._inp.setFocus)
@@ -833,7 +969,11 @@ class ResultsPage(QWidget):
         v.addWidget(hline(ORANGE_B))
         st, sc = get_status(res["fat"], res["fat_min"], res["fat_max"])
         v.addWidget(lbl(st, 12, True, sc))
-        v.addWidget(CircleWidget(res["fat"], res["fat_min"], res["fat_max"], ORANGE), 0, Qt.AlignCenter)
+        v.addWidget(
+            CircleWidget(res["fat"], res["fat_min"], res["fat_max"], ORANGE),
+            0,
+            Qt.AlignCenter,
+        )
         v.addWidget(
             lbl(
                 f"Dagsbudget: {res['fat_min_d']}–{res['fat_max_d']} g",
@@ -851,7 +991,11 @@ class ResultsPage(QWidget):
         v.addWidget(hline(BLUE_B))
         st, sc = get_status(res["prot"], res["pro_min"], res["pro_max"])
         v.addWidget(lbl(st, 12, True, sc))
-        v.addWidget(CircleWidget(res["prot"], res["pro_min"], res["pro_max"], BLUE), 0, Qt.AlignCenter)
+        v.addWidget(
+            CircleWidget(res["prot"], res["pro_min"], res["pro_max"], BLUE),
+            0,
+            Qt.AlignCenter,
+        )
         v.addWidget(
             lbl(
                 f"Dagsbudget: {res['pro_min_d']}–{res['pro_max_d']} g",
