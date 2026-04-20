@@ -195,11 +195,22 @@ def hline(color="#E5E7EB"):
     return ln
 
 
+class ClickableCard(QFrame):
+    clicked = pyqtSignal()
+
+    def __init__(self, bg, border, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setStyleSheet(f"QFrame{{background:{bg};}}")
+        self.setCursor(Qt.PointingHandCursor)
+
+    def mousePressEvent(self, e):
+        super().mousePressEvent(e)
+        self.clicked.emit()
+
+
 def make_card(bg, border):
-    f = QFrame()
-    f.setAttribute(Qt.WA_StyledBackground, True)
-    f.setStyleSheet(f"QFrame{{background:{bg};}}")
-    return f
+    return ClickableCard(bg, border)
 
 
 def scanner_field(placeholder, color=AMBER_B):
@@ -582,6 +593,7 @@ class GenderPage(QWidget):
         self._card_emojis = []
         self._card_labels = []
         self._card_qr = []
+        self._card_widgets = []
         for bg, border in colors:
             c = make_card(bg, border)
             v = QVBoxLayout(c)
@@ -599,9 +611,11 @@ class GenderPage(QWidget):
             self._card_emojis.append(e)
             self._card_labels.append(t)
             self._card_qr.append(qr)
+            self._card_widgets.append(c)
         root.addLayout(cards_row)
 
         self._inp = scanner_field("Scanna könkod...")
+        self._inp.textChanged.connect(self._live)
         self._inp.returnPressed.connect(self._submit)
         root.addWidget(self._inp)
 
@@ -622,11 +636,30 @@ class GenderPage(QWidget):
             self._card_emojis[i].setVisible(bool(emoji))
             self._card_labels[i].setText(label)
             self._card_qr[i].setPixmap(make_qr_pixmap(code, 110))
+            try:
+                self._card_widgets[i].clicked.disconnect()
+            except TypeError:
+                pass
+            self._card_widgets[i].clicked.connect(
+                lambda checked=False, k=code: self._inp.setText(k)
+            )
         self._inp.setPlaceholderText(hint)
 
     def showEvent(self, _):
         self._inp.clear()
         QTimer.singleShot(80, self._inp.setFocus)
+
+    def _live(self, txt):
+        key = txt.strip().lower()
+        MAP = {
+            "pojke": "man", "flicka": "kvinna", "man": "man",
+            "kvinna": "kvinna", "annat": "annan", "annan": "annan",
+            "vill ej ange": "annan",
+        }
+        if key in MAP:
+            self._err.setText("")
+            self._inp.clear()
+            self.chosen.emit(MAP[key])
 
     def _submit(self):
         raw = self._inp.text().strip().lower()
@@ -678,6 +711,7 @@ class AgePage(QWidget):
             qr_lbl.setAlignment(Qt.AlignCenter)
             qr_lbl.setPixmap(make_qr_pixmap(code, 140))
             v.addWidget(qr_lbl)
+            c.clicked.connect(lambda checked=False, k=code: self._inp.setText(k))
             cards_row.addWidget(c)
         root.addLayout(cards_row)
 
@@ -767,6 +801,7 @@ class FoodPage(QWidget):
             ql.setAlignment(Qt.AlignCenter)
             ql.setPixmap(make_qr_pixmap(code, 110))
             v.addWidget(ql)
+            c.clicked.connect(lambda checked=False, k=code: self._inp.setText(k))
             action_row.addWidget(c)
         root.addLayout(action_row)
         root.addStretch()
@@ -860,6 +895,7 @@ class ResultsPage(QWidget):
             ql.setAlignment(Qt.AlignCenter)
             ql.setPixmap(make_qr_pixmap(code, 110))
             v.addWidget(ql)
+            c.clicked.connect(lambda checked=False, k=code: self._inp.setText(k))
             action_row.addWidget(c)
         outer.addLayout(action_row)
 
