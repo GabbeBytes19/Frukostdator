@@ -240,8 +240,10 @@ def make_qr_pixmap(data: str, size: int = 150) -> QPixmap:
     if key in _qr_cache:
         return _qr_cache[key]
     try:
-        import qrcode
         from io import BytesIO
+
+        import qrcode
+
         img = qrcode.make(data)
         img = img.resize((size, size))
         buf = BytesIO()
@@ -256,11 +258,11 @@ def make_qr_pixmap(data: str, size: int = 150) -> QPixmap:
 
 
 AGE_INTERVALS = [
-    ("0–5 år",   "age:0-5",   4),
-    ("6–9 år",   "age:6-9",   8),
+    ("0–5 år", "age:0-5", 4),
+    ("6–9 år", "age:6-9", 8),
     ("10–15 år", "age:10-15", 12),
     ("15–19 år", "age:15-19", 17),
-    ("20+ år",   "age:20+",   30),
+    ("20+ år", "age:20+", 30),
 ]
 _AGE_MAP = {code: age for _, code, age in AGE_INTERVALS}
 
@@ -400,9 +402,7 @@ class SugarWidget(QWidget):
                 (0.47, 0.48),
             ]:
                 p.drawEllipse(
-                    QRectF(
-                        cx + fdx * CUBE - dr, top_y + fdy * ch - dr, dr * 2, dr * 2
-                    )
+                    QRectF(cx + fdx * CUBE - dr, top_y + fdy * ch - dr, dr * 2, dr * 2)
                 )
             # highlight
             p.setPen(QPen(QColor(255, 255, 255, 210), 1.2))
@@ -593,7 +593,9 @@ class GenderPage(QWidget):
         root.setSpacing(30)
 
         root.addWidget(lbl("Hej! Vem är du?", 34, True, DARK, Qt.AlignCenter))
-        root.addWidget(lbl("Scanna din könkod på skärmen", 16, False, MUTED, Qt.AlignCenter))
+        root.addWidget(
+            lbl("Scanna din könkod på skärmen", 16, False, MUTED, Qt.AlignCenter)
+        )
 
         cards_row = QHBoxLayout()
         cards_row.setSpacing(20)
@@ -638,10 +640,18 @@ class GenderPage(QWidget):
     def setup(self, age):
         self._age = age
         if age < 18:
-            opts = [("🧒", "Pojke", "pojke"), ("👧", "Flicka", "flicka"), ("", "Annat", "annat")]
+            opts = [
+                ("🧒", "Pojke", "pojke"),
+                ("👧", "Flicka", "flicka"),
+                ("", "Annat", "annat"),
+            ]
             hint = "Scanna könkod på skärmen"
         else:
-            opts = [("👨", "Man", "man"), ("👩", "Kvinna", "kvinna"), ("", "Annat", "annat")]
+            opts = [
+                ("👨", "Man", "man"),
+                ("👩", "Kvinna", "kvinna"),
+                ("", "Annat", "annat"),
+            ]
             hint = "Scanna könkod på skärmen"
         for i, (emoji, label, code) in enumerate(opts):
             self._card_emojis[i].setText(emoji)
@@ -662,10 +672,14 @@ class GenderPage(QWidget):
         QTimer.singleShot(80, self._inp.setFocus)
 
     def _live(self, txt):
-        key = txt.strip().lower()
+        key = txt.strip().lower().replace(".", "")
         MAP = {
-            "pojke": "man", "flicka": "kvinna", "man": "man",
-            "kvinna": "kvinna", "annat": "annan", "annan": "annan",
+            "pojke": "man",
+            "flicka": "kvinna",
+            "man": "man",
+            "kvinna": "kvinna",
+            "annat": "annan",
+            "annan": "annan",
             "vill ej ange": "annan",
         }
         if key in MAP:
@@ -702,7 +716,9 @@ class AgePage(QWidget):
         root.setSpacing(20)
 
         root.addWidget(lbl("Hur gammal är du? 🎂", 34, True, DARK, Qt.AlignCenter))
-        root.addWidget(lbl("Scanna din åldersgrupp på skärmen", 16, False, MUTED, Qt.AlignCenter))
+        root.addWidget(
+            lbl("Scanna din åldersgrupp på skärmen", 16, False, MUTED, Qt.AlignCenter)
+        )
 
         cards_row = QHBoxLayout()
         cards_row.setSpacing(16)
