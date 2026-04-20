@@ -286,7 +286,7 @@ class RunnerWidget(QWidget):
 
     def set_speed(self, spd):
         # higher calorie speed value → smaller spd → larger dt → faster frames
-        self.dt = 0.09 * (0.55 / max(spd, 0.1))
+        self.dt = 0.055 * (0.55 / max(spd, 0.1))
 
     def _tick(self):
         self._accum += self.dt
@@ -305,16 +305,8 @@ class RunnerWidget(QWidget):
         px = self._frames[self._frame]
         px_w = px.width()
         px_h = px.height()
-        img_x = (w - px_w) // 2 + 10  # shift right slightly for speed lines
+        img_x = (w - px_w) // 2
         img_y = (h - px_h) // 2
-
-        # speed lines to the left — more lines at higher speed
-        n_lines = 3 if self.dt > 0.14 else (2 if self.dt > 0.08 else 1)
-        p.setPen(QPen(QColor(AMBER_B), 3, Qt.SolidLine, Qt.RoundCap))
-        for i in range(n_lines):
-            ly = img_y + px_h * 0.35 + i * (px_h * 0.22)
-            ln = 24 - i * 5
-            p.drawLine(QPointF(img_x - 8 - ln, ly), QPointF(img_x - 8, ly))
 
         # shadow
         p.setPen(Qt.NoPen)
@@ -431,6 +423,26 @@ class SugarWidget(QWidget):
                     QColor("#FCA5A5"),
                     QColor(220, 80, 80, 120),
                 )
+
+        # Half cube when sugar > 0 but less than one full cube (< 4g)
+        if n_filled == 0 and cC > 0:
+            top_y = base_y - CUBE
+            p.save()
+            p.setClipRect(QRectF(
+                cx - 4,
+                base_y - CUBE * 0.5,
+                CUBE + D * 0.58 + 12,
+                CUBE * 0.5 + D * 0.42 + 4,
+            ))
+            draw_cube(
+                top_y,
+                QColor("#FAFAFA"),
+                QColor("#DBEAFE"),
+                QColor("#93C5FD"),
+                QColor("#BFDBFE"),
+                QColor(148, 163, 184, 100),
+            )
+            p.restore()
 
         # ── MAX horizontal line at exact fractional height ────────────────
         max_y = base_y - mC * CUBE
