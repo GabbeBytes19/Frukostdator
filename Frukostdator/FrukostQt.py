@@ -219,67 +219,69 @@ def scanner_field(placeholder, color=AMBER_B):
     return e
 
 
-# ── Chameleon runner (animated bounce) ───────────────────────────────────
-_CHAM_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                          "Loggan-i-farg-e1740579067534.png")
+# ── Chameleon sprite runner ───────────────────────────────────────────────
+_CHAM_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Chameleon")
 
 class RunnerWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(160, 140)
+        self.setFixedSize(160, 130)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.t  = 0.0
-        self.dt = 0.09
-        px = QPixmap(_CHAM_PATH)
-        # Scale to fit widget, keep aspect ratio
-        self._px = px.scaled(120, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.dt     = 0.09   # frame-advance speed (larger = faster)
+        self._frame = 0
+        self._accum = 0.0
+
+        # Load all 14 frames, scaled to fit
+        self._frames = []
+        for i in range(1, 15):
+            px = QPixmap(os.path.join(_CHAM_DIR, f"{i:02d}.png"))
+            self._frames.append(
+                px.scaled(110, 95, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+
         self._tmr = QTimer(self)
         self._tmr.timeout.connect(self._tick)
         self._tmr.start(33)
 
     def set_speed(self, spd):
+        # higher calorie speed value → smaller spd → larger dt → faster frames
         self.dt = 0.09 * (0.55 / max(spd, 0.1))
 
     def _tick(self):
-        self.t = (self.t + self.dt) % (2 * math.pi)
+        self._accum += self.dt
+        while self._accum >= 0.09:        # advance one frame per 0.09 units accumulated
+            self._accum -= 0.09
+            self._frame = (self._frame + 1) % len(self._frames)
         self.update()
 
     def paintEvent(self, _):
+        if not self._frames:
+            return
         p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
         w, h = self.width(), self.height()
 
-        bounce  = abs(math.sin(self.t)) * 9          # vertical hop
-        tilt    = math.sin(self.t) * 4               # gentle lean in degrees
-        n_lines = 3 if self.dt < 0.07 else (2 if self.dt < 0.12 else 1)  # more lines = faster
+        px      = self._frames[self._frame]
+        px_w    = px.width()
+        px_h    = px.height()
+        img_x   = (w - px_w) // 2 + 10   # shift right slightly for speed lines
+        img_y   = (h - px_h) // 2
 
-        px_w = self._px.width()
-        px_h = self._px.height()
-        img_x = (w - px_w) // 2 + 10                # slightly right to leave room for lines
-        img_y = int((h - px_h) / 2 - bounce + 4)
-
-        # shadow on ground
-        p.setPen(Qt.NoPen)
-        shadow_alpha = max(20, 60 - int(bounce * 3))
-        p.setBrush(QColor(0, 0, 0, shadow_alpha))
-        p.drawEllipse(QRectF(img_x + px_w * 0.1, h - 18,
-                             px_w * 0.8, 10 - bounce * 0.3))
-
-        # speed lines to the left
-        line_x = img_x - 8
+        # speed lines to the left — more lines at higher speed
+        n_lines = 3 if self.dt > 0.14 else (2 if self.dt > 0.08 else 1)
         p.setPen(QPen(QColor(AMBER_B), 3, Qt.SolidLine, Qt.RoundCap))
         for i in range(n_lines):
-            ly = img_y + px_h * 0.3 + i * (px_h * 0.22)
-            length = 22 - i * 5
-            p.drawLine(QPointF(line_x - length, ly), QPointF(line_x, ly))
+            ly = img_y + px_h * 0.35 + i * (px_h * 0.22)
+            ln = 24 - i * 5
+            p.drawLine(QPointF(img_x - 8 - ln, ly), QPointF(img_x - 8, ly))
 
-        # draw chameleon with tilt
-        p.save()
-        p.translate(img_x + px_w / 2, img_y + px_h / 2)
-        p.rotate(tilt)
-        p.drawPixmap(-px_w // 2, -px_h // 2, self._px)
-        p.restore()
+        # shadow
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(0, 0, 0, 25))
+        p.drawEllipse(QRectF(img_x + px_w * 0.1, h - 14, px_w * 0.8, 8))
+
+        # current frame
+        p.drawPixmap(img_x, img_y, px)
 
 
 # ── Sugar cubes (QPainter) ────────────────────────────────────────────────
