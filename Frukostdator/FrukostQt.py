@@ -490,6 +490,7 @@ class GenderPage(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._age = 0
         root = QVBoxLayout(self)
         root.setContentsMargins(80, 50, 80, 50)
         root.setSpacing(30)
@@ -497,31 +498,51 @@ class GenderPage(QWidget):
         root.addWidget(lbl("Hej! Vem är du?", 34, True, DARK, Qt.AlignCenter))
         root.addWidget(lbl("Scanna din könkod", 16, False, MUTED, Qt.AlignCenter))
 
-        cards = QHBoxLayout()
-        cards.setSpacing(20)
-        for emoji, label, bg, border in [
-            ("🧒", "Pojke", BLUE_L, BLUE_B),
-            ("👧", "Flicka", "#FCE7F3", "#F9A8D4"),
-            ("", "Annat", VIOLET_L, VIOLET_B),
-        ]:
+        cards_row = QHBoxLayout()
+        cards_row.setSpacing(20)
+        colors = [
+            (BLUE_L,      BLUE_B),
+            ("#FCE7F3",   "#F9A8D4"),
+            (VIOLET_L,    VIOLET_B),
+        ]
+        self._card_emojis = []
+        self._card_labels = []
+        for bg, border in colors:
             c = make_card(bg, border)
             v = QVBoxLayout(c)
             v.setContentsMargins(20, 22, 20, 22)
             v.setSpacing(8)
-            if emoji:
-                v.addWidget(lbl(emoji, 54, False, DARK, Qt.AlignCenter))
-            v.addWidget(lbl(label, 28, True, DARK, Qt.AlignCenter))
+            e = lbl("", 54, False, DARK, Qt.AlignCenter)
+            t = lbl("", 28, True,  DARK, Qt.AlignCenter)
+            v.addWidget(e)
+            v.addWidget(t)
             c.setMinimumHeight(170)
-            cards.addWidget(c)
-        root.addLayout(cards)
+            cards_row.addWidget(c)
+            self._card_emojis.append(e)
+            self._card_labels.append(t)
+        root.addLayout(cards_row)
 
-        self._inp = scanner_field("Scanna könkod: man / kvinna / annan / vill ej ange")
+        self._inp = scanner_field("Scanna könkod...")
         self._inp.returnPressed.connect(self._submit)
         root.addWidget(self._inp)
 
         self._err = lbl("", 13, False, RED, Qt.AlignCenter)
         root.addWidget(self._err)
         root.addStretch()
+
+    def setup(self, age):
+        self._age = age
+        if age < 18:
+            opts  = [("🧒", "Pojke"), ("👧", "Flicka"), ("", "Annat")]
+            hint  = "Scanna könkod: pojke / flicka / annat"
+        else:
+            opts  = [("👨", "Man"), ("👩", "Kvinna"), ("", "Annat")]
+            hint  = "Scanna könkod: man / kvinna / annat"
+        for i, (emoji, label) in enumerate(opts):
+            self._card_emojis[i].setText(emoji)
+            self._card_emojis[i].setVisible(bool(emoji))
+            self._card_labels[i].setText(label)
+        self._inp.setPlaceholderText(hint)
 
     def showEvent(self, _):
         self._inp.clear()
@@ -531,13 +552,9 @@ class GenderPage(QWidget):
         raw = self._inp.text().strip().lower()
         self._inp.clear()
         MAP = {
-            "pojke": "man",
-            "flicka": "kvinna",
-            "annat": "annan",
-            "vill ej ange": "annan",
-            "man": "man",
-            "kvinna": "kvinna",
-            "annan": "annan",
+            "pojke": "man", "flicka": "kvinna",
+            "man": "man",   "kvinna": "kvinna",
+            "annat": "annan", "annan": "annan", "vill ej ange": "annan",
         }
         if raw in MAP:
             self._err.setText("")
@@ -783,13 +800,7 @@ class ResultsPage(QWidget):
         )
         rw = RunnerWidget()
         rw.set_speed(spd)
-        wrap = QWidget()
-        wrap.setStyleSheet("background:transparent;")
-        wl = QHBoxLayout(wrap)
-        wl.addStretch()
-        wl.addWidget(rw)
-        wl.addStretch()
-        v.addWidget(wrap)
+        v.addWidget(rw, 0, Qt.AlignCenter)
         self._grid.addWidget(c, 0, 1)
 
         # Distance
@@ -822,13 +833,7 @@ class ResultsPage(QWidget):
         v.addWidget(hline(ORANGE_B))
         st, sc = get_status(res["fat"], res["fat_min"], res["fat_max"])
         v.addWidget(lbl(st, 12, True, sc))
-        fw = QWidget()
-        fw.setStyleSheet("background:transparent;")
-        fl = QHBoxLayout(fw)
-        fl.addStretch()
-        fl.addWidget(CircleWidget(res["fat"], res["fat_min"], res["fat_max"], ORANGE))
-        fl.addStretch()
-        v.addWidget(fw)
+        v.addWidget(CircleWidget(res["fat"], res["fat_min"], res["fat_max"], ORANGE), 0, Qt.AlignCenter)
         v.addWidget(
             lbl(
                 f"Dagsbudget: {res['fat_min_d']}–{res['fat_max_d']} g",
@@ -846,13 +851,7 @@ class ResultsPage(QWidget):
         v.addWidget(hline(BLUE_B))
         st, sc = get_status(res["prot"], res["pro_min"], res["pro_max"])
         v.addWidget(lbl(st, 12, True, sc))
-        pw = QWidget()
-        pw.setStyleSheet("background:transparent;")
-        pl = QHBoxLayout(pw)
-        pl.addStretch()
-        pl.addWidget(CircleWidget(res["prot"], res["pro_min"], res["pro_max"], BLUE))
-        pl.addStretch()
-        v.addWidget(pw)
+        v.addWidget(CircleWidget(res["prot"], res["pro_min"], res["pro_max"], BLUE), 0, Qt.AlignCenter)
         v.addWidget(
             lbl(
                 f"Dagsbudget: {res['pro_min_d']}–{res['pro_max_d']} g",
@@ -893,7 +892,7 @@ class MainWindow(QWidget):
         hl.addWidget(lbl("🍳 Frukostdatorn", 20, True, AMBER))
         hl.addStretch()
         self._step_labels = []
-        for s in ("👤 Vem", "🔢 Ålder", "🍎 Frukost", "✨ Resultat"):
+        for s in ("🔢 Ålder", "👤 Vem", "🍎 Frukost", "✨ Resultat"):
             lb = QLabel(s)
             lb.setStyleSheet(
                 "background:#F3F4F6;color:#9CA3AF;border-radius:11px;"
@@ -916,17 +915,17 @@ class MainWindow(QWidget):
 
         # Pages
         self._stack = QStackedWidget()
-        self._p_gender = GenderPage()
         self._p_age = AgePage()
+        self._p_gender = GenderPage()
         self._p_food = FoodPage()
         self._p_results = ResultsPage()
-        for p in (self._p_gender, self._p_age, self._p_food, self._p_results):
+        for p in (self._p_age, self._p_gender, self._p_food, self._p_results):
             self._stack.addWidget(p)
         root.addWidget(self._stack)
 
         # Signals
-        self._p_gender.chosen.connect(self._on_gender)
         self._p_age.chosen.connect(self._on_age)
+        self._p_gender.chosen.connect(self._on_gender)
         self._p_food.calc_requested.connect(self._on_calc)
         self._p_food.reset_requested.connect(self._do_reset)
         self._p_results.reset_requested.connect(self._do_reset)
@@ -949,14 +948,15 @@ class MainWindow(QWidget):
         for i, lb in enumerate(self._step_labels):
             lb.setStyleSheet(ACTIVE if i == idx else DONE if i < idx else PENDING)
 
+    def _on_age(self, a):
+        self._age = a
+        self._tsec = 60
+        self._p_gender.setup(a)
+        self._go(1)
+
     def _on_gender(self, g):
         self._gender = g
         self._tactive = True
-        self._tsec = 60
-        self._go(1)
-
-    def _on_age(self, a):
-        self._age = a
         self._tsec = 60
         self._p_food.reset()
         self._go(2)
