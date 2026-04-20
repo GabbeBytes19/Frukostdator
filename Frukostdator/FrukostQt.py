@@ -653,6 +653,7 @@ class GenderPage(QWidget):
                 ("", "Annat", "other"),
             ]
             hint = "Scanna könkod på skärmen"
+        print(f"Kolla vi valde den här oldern: {age}")
         for i, (emoji, label, code) in enumerate(opts):
             self._card_emojis[i].setText(emoji)
             self._card_emojis[i].setVisible(bool(emoji))
