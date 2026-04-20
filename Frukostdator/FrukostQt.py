@@ -351,7 +351,8 @@ class SugarWidget(QWidget):
         cx = (w - stack_w) / 2 - 10
         base_y = h - BOT_M
 
-        def draw_cube(top_y, c_front, c_top, c_side, c_border, c_dot):
+        def draw_cube(top_y, c_front, c_top, c_side, c_border, c_dot, cube_h=None):
+            ch = CUBE if cube_h is None else cube_h
             # right side face
             p.setBrush(c_side)
             p.setPen(QPen(c_border, 0.7))
@@ -360,8 +361,8 @@ class SugarWidget(QWidget):
                     [
                         QPointF(cx + CUBE, top_y),
                         QPointF(cx + CUBE + D * 0.58, top_y - D * 0.42),
-                        QPointF(cx + CUBE + D * 0.58, top_y + CUBE - D * 0.42),
-                        QPointF(cx + CUBE, top_y + CUBE),
+                        QPointF(cx + CUBE + D * 0.58, top_y + ch - D * 0.42),
+                        QPointF(cx + CUBE, top_y + ch),
                     ]
                 )
             )
@@ -380,7 +381,7 @@ class SugarWidget(QWidget):
             # front face
             p.setBrush(c_front)
             p.setPen(QPen(c_border, 0.7))
-            p.drawRect(QRectF(cx, top_y, CUBE, CUBE))
+            p.drawRect(QRectF(cx, top_y, CUBE, ch))
             # crystal dots
             p.setPen(Qt.NoPen)
             p.setBrush(c_dot)
@@ -394,7 +395,7 @@ class SugarWidget(QWidget):
             ]:
                 p.drawEllipse(
                     QRectF(
-                        cx + fdx * CUBE - dr, top_y + fdy * CUBE - dr, dr * 2, dr * 2
+                        cx + fdx * CUBE - dr, top_y + fdy * ch - dr, dr * 2, dr * 2
                     )
                 )
             # highlight
@@ -426,23 +427,16 @@ class SugarWidget(QWidget):
 
         # Half cube when sugar > 0 but less than one full cube (< 4g)
         if n_filled == 0 and cC > 0:
-            top_y = base_y - CUBE
-            p.save()
-            p.setClipRect(QRectF(
-                cx - 4,
-                base_y - CUBE * 0.5,
-                CUBE + D * 0.58 + 12,
-                CUBE * 0.5 + D * 0.42 + 4,
-            ))
+            half_h = CUBE * 0.5
             draw_cube(
-                top_y,
+                base_y - half_h,
                 QColor("#FAFAFA"),
                 QColor("#DBEAFE"),
                 QColor("#93C5FD"),
                 QColor("#BFDBFE"),
                 QColor(148, 163, 184, 100),
+                cube_h=half_h,
             )
-            p.restore()
 
         # ── MAX horizontal line at exact fractional height ────────────────
         max_y = base_y - mC * CUBE
