@@ -232,46 +232,37 @@ def scanner_field(placeholder, color=AMBER_B):
     return e
 
 
-_bc_cache: dict = {}
+_qr_cache: dict = {}
 
 
-def make_barcode_pixmap(data: str, width: int = 260, height: int = 70) -> QPixmap:
-    key = (data, width, height)
-    if key in _bc_cache:
-        return _bc_cache[key]
+def make_qr_pixmap(data: str, size: int = 150) -> QPixmap:
+    key = (data, size)
+    if key in _qr_cache:
+        return _qr_cache[key]
     try:
         from io import BytesIO
 
-        import barcode
-        from barcode.writer import ImageWriter
+        import qrcode
 
-        code = barcode.get("code128", data, writer=ImageWriter())
+        img = qrcode.make(data)
+        img = img.resize((size, size))
         buf = BytesIO()
-        code.write(
-            buf,
-            options={
-                "write_text": False,
-                "module_height": 12.0,
-                "quiet_zone": 3.0,
-                "dpi": 150,
-            },
-        )
+        img.save(buf, format="PNG")
         px = QPixmap()
         px.loadFromData(buf.getvalue())
-        px = px.scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
     except Exception:
-        px = QPixmap(width, height)
+        px = QPixmap(size, size)
         px.fill(QColor("#E5E7EB"))
-    _bc_cache[key] = px
+    _qr_cache[key] = px
     return px
 
 
 AGE_INTERVALS = [
-    ("0–5 år", "age:0-5", 4),
-    ("6–9 år", "age:6-9", 8),
-    ("10–15 år", "age:10-15", 12),
-    ("15–19 år", "age:15-19", 17),
-    ("20+ år", "age:20+", 30),
+    ("0–5 år", "05", 4),
+    ("6–9 år", "69", 8),
+    ("10–15 år", "1015", 12),
+    ("15–19 år", "1519", 17),
+    ("20+ år", "2000", 30),
 ]
 _AGE_MAP = {code: age for _, code, age in AGE_INTERVALS}
 
@@ -650,23 +641,23 @@ class GenderPage(QWidget):
         self._age = age
         if age < 18:
             opts = [
-                ("🧒", "Pojke", "pojke"),
-                ("👧", "Flicka", "flicka"),
-                ("", "Annat", "annat"),
+                ("🧒", "Pojke", "boy"),
+                ("👧", "Flicka", "girl"),
+                ("", "Annat", "other"),
             ]
             hint = "Scanna könkod på skärmen"
         else:
             opts = [
                 ("👨", "Man", "man"),
-                ("👩", "Kvinna", "kvinna"),
-                ("", "Annat", "annat"),
+                ("👩", "Kvinna", "woman"),
+                ("", "Annat", "other"),
             ]
             hint = "Scanna könkod på skärmen"
         for i, (emoji, label, code) in enumerate(opts):
             self._card_emojis[i].setText(emoji)
             self._card_emojis[i].setVisible(bool(emoji))
             self._card_labels[i].setText(label)
-            self._card_qr[i].setPixmap(make_barcode_pixmap(code, 220, 60))
+            self._card_qr[i].setPixmap(make_qr_pixmap(code, 120))
             try:
                 self._card_widgets[i].clicked.disconnect()
             except TypeError:
@@ -683,13 +674,14 @@ class GenderPage(QWidget):
     def _live(self, txt):
         key = txt.strip().lower().replace(".", "")
         MAP = {
+            "boy": "man",
+            "girl": "kvinna",
+            "man": "man",
+            "woman": "kvinna",
+            "other": "annan",
             "pojke": "man",
             "flicka": "kvinna",
-            "man": "man",
-            "kvinna": "kvinna",
             "annat": "annan",
-            "annan": "annan",
-            "vill ej ange": "annan",
         }
         if key in MAP:
             self._err.setText("")
@@ -700,13 +692,14 @@ class GenderPage(QWidget):
         raw = self._inp.text().strip().lower()
         self._inp.clear()
         MAP = {
+            "boy": "man",
+            "girl": "kvinna",
+            "man": "man",
+            "woman": "kvinna",
+            "other": "annan",
             "pojke": "man",
             "flicka": "kvinna",
-            "man": "man",
-            "kvinna": "kvinna",
             "annat": "annan",
-            "annan": "annan",
-            "vill ej ange": "annan",
         }
         if raw in MAP:
             self._err.setText("")
@@ -746,7 +739,7 @@ class AgePage(QWidget):
             v.addWidget(lbl(label, 20, True, DARK, Qt.AlignCenter))
             qr_lbl = QLabel()
             qr_lbl.setAlignment(Qt.AlignCenter)
-            qr_lbl.setPixmap(make_barcode_pixmap(code, 260, 70))
+            qr_lbl.setPixmap(make_qr_pixmap(code, 130))
             v.addWidget(qr_lbl)
             c.clicked.connect(lambda checked=False, k=code: self._inp.setText(k))
             cards_row.addWidget(c)
@@ -836,7 +829,7 @@ class FoodPage(QWidget):
             v.addWidget(lbl(label, 14, True, txt_col, Qt.AlignCenter))
             ql = QLabel()
             ql.setAlignment(Qt.AlignCenter)
-            ql.setPixmap(make_barcode_pixmap(code, 220, 60))
+            ql.setPixmap(make_qr_pixmap(code, 120))
             v.addWidget(ql)
             c.clicked.connect(lambda checked=False, k=code: self._inp.setText(k))
             action_row.addWidget(c)
@@ -930,7 +923,7 @@ class ResultsPage(QWidget):
             v.addWidget(lbl(label, 14, True, txt_col, Qt.AlignCenter))
             ql = QLabel()
             ql.setAlignment(Qt.AlignCenter)
-            ql.setPixmap(make_barcode_pixmap(code, 220, 60))
+            ql.setPixmap(make_qr_pixmap(code, 120))
             v.addWidget(ql)
             c.clicked.connect(lambda checked=False, k=code: self._inp.setText(k))
             action_row.addWidget(c)
