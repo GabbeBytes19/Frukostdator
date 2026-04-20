@@ -139,21 +139,24 @@ def get_status(v, lo, hi):
 
 
 def calc(foods, food_list, age, gender):
-    kcal = fat = prot = sug = 0
+    kcal = fat = prot = sug = fiber = 0
     for n in food_list:
         info = foods.get(n.strip().lower(), {})
         kcal += info.get("Energi", 0)
         fat += info.get("Fett", 0)
         prot += info.get("Protein", 0)
         sug += info.get("Socker", 0)
+        fiber += info.get("Fibrer", 0)
     daily = daily_kcal(age, gender)
     w = estimate_weight(age)
     dk = kcal / w if w else 0
+    fiber_daily = 15 if age <= 6 else (20 if age <= 10 else (25 if age <= 17 else 30))
     return dict(
         kcal=kcal,
         fat=fat,
         prot=prot,
         sug=sug,
+        fiber=fiber,
         daily=daily,
         pct=round(kcal / daily * 100) if daily else 0,
         kcal_min=round(daily * 0.20),
@@ -167,6 +170,9 @@ def calc(foods, food_list, age, gender):
         pro_min_d=round(daily * 0.10 / 4),
         pro_max_d=round(daily * 0.20 / 4),
         sug_max=round(daily * 0.10 / 4 * 0.25),
+        fiber_min=round(fiber_daily * 0.20),
+        fiber_max=round(fiber_daily * 0.25),
+        fiber_daily=fiber_daily,
         dist_km=dk,
         dist_m=dk * 1000,
         place=nearest_place(dk),
@@ -957,7 +963,7 @@ class ResultsPage(QWidget):
                 MUTED,
             )
         )
-        self._grid.addWidget(c, 0, 0)
+        self._grid.addWidget(c, 0, 0, 1, 2)  # Energy spans 2 cols
 
         # Runner
         c, v = card_vbox(BLUE_L, BLUE_B)
@@ -979,7 +985,7 @@ class ResultsPage(QWidget):
         rw = RunnerWidget()
         rw.set_speed(spd)
         v.addWidget(rw, 0, Qt.AlignCenter)
-        self._grid.addWidget(c, 0, 1)
+        self._grid.addWidget(c, 0, 2)
 
         # Distance
         dv, du = fmt_dist(res["dist_m"])
@@ -990,7 +996,7 @@ class ResultsPage(QWidget):
         v.addWidget(lbl(f"{dv} {du}", 32, True, VIOLET, Qt.AlignCenter))
         v.addWidget(lbl("Ungefär till:", 12, True, MUTED))
         v.addWidget(lbl(res["place"], 14, True, "#4C1D95"))
-        self._grid.addWidget(c, 0, 2)
+        self._grid.addWidget(c, 0, 3)
 
         # Sugar
         ok = res["sug"] <= res["sug_max"]
@@ -1048,6 +1054,28 @@ class ResultsPage(QWidget):
             )
         )
         self._grid.addWidget(c, 1, 2)
+
+        # Fiber
+        c, v = card_vbox("#F0FDFA", "#5EEAD4")
+        v.addWidget(lbl("🌾 Fibrer", 17, True, "#0F766E"))
+        v.addWidget(hline("#5EEAD4"))
+        st, sc = get_status(res["fiber"], res["fiber_min"], res["fiber_max"])
+        v.addWidget(lbl(st, 12, True, sc))
+        v.addWidget(
+            CircleWidget(res["fiber"], res["fiber_min"], res["fiber_max"], "#14B8A6"),
+            0,
+            Qt.AlignCenter,
+        )
+        v.addWidget(
+            lbl(
+                f"Dagsbehov: {res['fiber_daily']} g",
+                12,
+                True,
+                MUTED,
+                Qt.AlignCenter,
+            )
+        )
+        self._grid.addWidget(c, 1, 3)
 
         QTimer.singleShot(80, self._inp.setFocus)
 

@@ -1,9 +1,11 @@
 import pandas as pd
 
+
 def get_excel_file():
     # Se till att filnamnet stämmer med din fil
-    df = pd.read_excel("LivsmedelsDB_202602231534.xlsx", header=2) 
+    df = pd.read_excel("LivsmedelsDB_202602231534.xlsx", header=2)
     return df
+
 
 def get_food_and_info(df):
     foods = {}
@@ -15,16 +17,19 @@ def get_food_and_info(df):
             "Energi": row["Energi (kcal)"],
             "Fett": row["Fett, totalt (g)"],
             "Protein": row["Protein (g)"],
-            "Socker": row["Fritt socker (g)"]
+            "Socker": row["Sockerarter, totalt (g)"],
+            "Fibrer": row["Fibrer (g)"],
         }
         foods[name] = value
     return foods
+
 
 def get_data_from_scanner(foods, food_list):
     total_energi = 0
     total_fett = 0
     total_protein = 0
     total_socker = 0
+    total_fibrer = 0
 
     for food in food_list:
         if food in foods:
@@ -33,5 +38,6 @@ def get_data_from_scanner(foods, food_list):
             total_fett += info["Fett"]
             total_protein += info["Protein"]
             total_socker += info["Socker"]
+            total_fibrer += info["Fibrer"]
 
-    return [total_energi, total_fett, total_protein, total_socker]
+    return [total_energi, total_fett, total_protein, total_socker, total_fibrer]
