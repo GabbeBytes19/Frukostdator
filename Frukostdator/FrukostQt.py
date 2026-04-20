@@ -232,28 +232,37 @@ def scanner_field(placeholder, color=AMBER_B):
     return e
 
 
-_qr_cache: dict = {}
+_bc_cache: dict = {}
 
 
-def make_qr_pixmap(data: str, size: int = 150) -> QPixmap:
-    key = (data, size)
-    if key in _qr_cache:
-        return _qr_cache[key]
+def make_barcode_pixmap(data: str, width: int = 260, height: int = 70) -> QPixmap:
+    key = (data, width, height)
+    if key in _bc_cache:
+        return _bc_cache[key]
     try:
         from io import BytesIO
 
-        import qrcode
+        import barcode
+        from barcode.writer import ImageWriter
 
-        img = qrcode.make(data)
-        img = img.resize((size, size))
+        code = barcode.get("code128", data, writer=ImageWriter())
         buf = BytesIO()
-        img.save(buf, format="PNG")
+        code.write(
+            buf,
+            options={
+                "write_text": False,
+                "module_height": 12.0,
+                "quiet_zone": 3.0,
+                "dpi": 150,
+            },
+        )
         px = QPixmap()
         px.loadFromData(buf.getvalue())
+        px = px.scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
     except Exception:
-        px = QPixmap(size, size)
+        px = QPixmap(width, height)
         px.fill(QColor("#E5E7EB"))
-    _qr_cache[key] = px
+    _bc_cache[key] = px
     return px
 
 
@@ -657,7 +666,7 @@ class GenderPage(QWidget):
             self._card_emojis[i].setText(emoji)
             self._card_emojis[i].setVisible(bool(emoji))
             self._card_labels[i].setText(label)
-            self._card_qr[i].setPixmap(make_qr_pixmap(code, 110))
+            self._card_qr[i].setPixmap(make_barcode_pixmap(code, 220, 60))
             try:
                 self._card_widgets[i].clicked.disconnect()
             except TypeError:
@@ -737,7 +746,7 @@ class AgePage(QWidget):
             v.addWidget(lbl(label, 20, True, DARK, Qt.AlignCenter))
             qr_lbl = QLabel()
             qr_lbl.setAlignment(Qt.AlignCenter)
-            qr_lbl.setPixmap(make_qr_pixmap(code, 140))
+            qr_lbl.setPixmap(make_barcode_pixmap(code, 260, 70))
             v.addWidget(qr_lbl)
             c.clicked.connect(lambda checked=False, k=code: self._inp.setText(k))
             cards_row.addWidget(c)
@@ -827,7 +836,7 @@ class FoodPage(QWidget):
             v.addWidget(lbl(label, 14, True, txt_col, Qt.AlignCenter))
             ql = QLabel()
             ql.setAlignment(Qt.AlignCenter)
-            ql.setPixmap(make_qr_pixmap(code, 110))
+            ql.setPixmap(make_barcode_pixmap(code, 220, 60))
             v.addWidget(ql)
             c.clicked.connect(lambda checked=False, k=code: self._inp.setText(k))
             action_row.addWidget(c)
@@ -921,7 +930,7 @@ class ResultsPage(QWidget):
             v.addWidget(lbl(label, 14, True, txt_col, Qt.AlignCenter))
             ql = QLabel()
             ql.setAlignment(Qt.AlignCenter)
-            ql.setPixmap(make_qr_pixmap(code, 110))
+            ql.setPixmap(make_barcode_pixmap(code, 220, 60))
             v.addWidget(ql)
             c.clicked.connect(lambda checked=False, k=code: self._inp.setText(k))
             action_row.addWidget(c)
