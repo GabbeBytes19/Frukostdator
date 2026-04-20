@@ -425,8 +425,8 @@ class SugarWidget(QWidget):
                     QColor(220, 80, 80, 120),
                 )
 
-        # Half cube when sugar > 0 but less than one full cube (< 4g)
-        if n_filled == 0 and cC > 0:
+        # Half cube whenever fewer than one full cube consumed (including 0g)
+        if n_filled == 0:
             half_h = CUBE * 0.5
             draw_cube(
                 base_y - half_h,
