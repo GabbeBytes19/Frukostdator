@@ -691,6 +691,8 @@ class GenderPage(QWidget):
     def _submit(self):
         raw = self._inp.text().strip().lower()
         self._inp.clear()
+        if not raw:
+            return
         MAP = {
             "boy": "man",
             "girl": "kvinna",
@@ -768,6 +770,8 @@ class AgePage(QWidget):
     def _submit(self):
         txt = self._inp.text().strip().lower()
         self._inp.clear()
+        if not txt:
+            return
         if txt in _AGE_MAP:
             self._err.setText("")
             self.chosen.emit(_AGE_MAP[txt])
