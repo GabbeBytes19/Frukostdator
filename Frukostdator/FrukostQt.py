@@ -133,7 +133,7 @@ def fmt_dist(meters):
 
 def get_status(v, lo, hi):
     if v < lo:
-        return "⚠  Lite lite", AMBER
+        return "⚠  Lite för lite", AMBER
     if v <= hi:
         return "✓  Perfekt!", GREEN
     return "!  Lite för mycket", RED
@@ -258,16 +258,6 @@ def make_qr_pixmap(data: str, size: int = 150) -> QPixmap:
     return px
 
 
-AGE_INTERVALS = [
-    ("0–5 år", "05", 4),
-    ("6–9 år", "69", 8),
-    ("10–15 år", "1015", 12),
-    ("15–19 år", "1519", 17),
-    ("20+ år", "2000", 30),
-]
-_AGE_MAP = {code: age for _, code, age in AGE_INTERVALS}
-
-
 # ── Chameleon sprite runner ───────────────────────────────────────────────
 _CHAM_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Chameleon")
 
@@ -275,7 +265,7 @@ _CHAM_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Chameleon"
 class RunnerWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(160, 130)
+        self.setFixedSize(160, 100)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.dt = 0.09  # frame-advance speed (larger = faster)
         self._frame = 0
@@ -582,6 +572,186 @@ class CircleWidget(QWidget):
 # PAGES
 # ═══════════════════════════════════════════════════════════════════════════
 
+# One colour per digit 0-9
+_DIGIT_COLORS = [
+    (GREEN_L,   GREEN_B),    # 0
+    (BLUE_L,    BLUE_B),     # 1
+    (AMBER_L,   AMBER_B),    # 2
+    (VIOLET_L,  VIOLET_B),   # 3
+    (ORANGE_L,  ORANGE_B),   # 4
+    ("#FCE7F3", "#F9A8D4"),  # 5
+    ("#FEF9C3", "#FDE047"),  # 6
+    ("#F0FDFA", "#5EEAD4"),  # 7
+    (ROSE_L,    ROSE_B),     # 8
+    ("#EFF6FF", BLUE_B),     # 9
+]
+
+
+class AgePage(QWidget):
+    """
+    Exact-age entry via two rows of digit cards (0-4 top, 5-9 bottom).
+
+    Behaviour
+    ---------
+    • Tap/scan a digit  → it is highlighted as the "tens" candidate and a
+      5-second countdown starts.
+    • Tap/scan a second digit before the timer fires → age = first*10 + second,
+      advance immediately.
+    • Timer fires with only one digit → that digit is the age, advance.
+
+    The hidden QLineEdit captures barcode-scanner keystrokes so the page
+    works without a mouse.
+    """
+
+    chosen = pyqtSignal(int)
+    COMMIT_MS = 5000  # ms to wait for a second digit
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self._first: int | None = None  # first digit received
+        self._cd_secs = 0               # countdown display value
+
+        # Single-shot timer that commits the first digit as the full age
+        self._commit_timer = QTimer(self)
+        self._commit_timer.setSingleShot(True)
+        self._commit_timer.timeout.connect(self._commit_single)
+
+        # 1-second ticker just for updating the countdown label
+        self._cd_timer = QTimer(self)
+        self._cd_timer.timeout.connect(self._cd_tick)
+
+        # ── Layout ────────────────────────────────────────────────────────
+        root = QVBoxLayout(self)
+        root.setContentsMargins(60, 40, 60, 30)
+        root.setSpacing(18)
+
+        root.addWidget(lbl("Hur gammal är du? 🎂", 34, True, DARK, Qt.AlignCenter))
+        root.addWidget(
+            lbl("Scanna en eller två siffror", 16, False, MUTED, Qt.AlignCenter)
+        )
+
+        # Countdown / status line
+        self._status = lbl("", 15, True, VIOLET, Qt.AlignCenter)
+        root.addWidget(self._status)
+
+        # Build digit cards – two rows
+        self._cards: list[ClickableCard] = []
+        for row_range in (range(0, 5), range(5, 10)):
+            row = QHBoxLayout()
+            row.setSpacing(12)
+            for d in row_range:
+                bg, border = _DIGIT_COLORS[d]
+                card = make_card(bg, border)
+                card.setMinimumHeight(130)
+                card_layout = QVBoxLayout(card)
+                card_layout.setContentsMargins(8, 10, 8, 10)
+                card_layout.setSpacing(4)
+
+                # Siffra
+                num_lbl = lbl(str(d), 52, True, DARK, Qt.AlignCenter)
+                num_lbl.setStyleSheet(f"color:{DARK}; background:transparent; border:none;")
+                card_layout.addWidget(num_lbl)
+
+                # QR-kod (scannar siffran som text)
+                qr = QLabel()
+                qr.setAlignment(Qt.AlignCenter)
+                qr.setPixmap(make_qr_pixmap(str(d), 90))
+                qr.setStyleSheet("border: none;") 
+                card_layout.addWidget(qr)
+                card.clicked.connect(
+                    lambda _checked=False, digit=d: self._digit_in(digit)
+                )
+                row.addWidget(card)
+                self._cards.append(card)   # index == digit value
+            root.addLayout(row)
+
+        # Hidden input – captures scanner stream; zero height so it's invisible
+        self._inp = QLineEdit()
+        self._inp.setFixedHeight(0)
+        self._inp.setStyleSheet("border:none;background:transparent;")
+        self._inp.textChanged.connect(self._on_text)
+        root.addWidget(self._inp)
+
+        self._err = lbl("", 12, False, RED, Qt.AlignCenter)
+        root.addWidget(self._err)
+        root.addStretch()
+
+    # ── public ────────────────────────────────────────────────────────────
+
+    def showEvent(self, _):
+        self._reset_state()
+        QTimer.singleShot(80, self._inp.setFocus)
+
+    # ── internal helpers ──────────────────────────────────────────────────
+
+    def _reset_state(self):
+        self._commit_timer.stop()
+        self._cd_timer.stop()
+        self._first = None
+        self._status.setText("")
+        self._err.setText("")
+        self._inp.clear()
+        self._set_highlight(-1)   # clear all highlights
+
+    def _set_highlight(self, active: int):
+        """Highlight the card at index `active`; clear all others."""
+        for i, card in enumerate(self._cards):
+            bg, border = _DIGIT_COLORS[i]
+            if i == active:
+                card.setStyleSheet(
+                    f"QFrame{{background:{bg};"
+                    f"border:4px solid {VIOLET};"
+                    f"border-radius:10px;}}"
+                )
+            else:
+                card.setStyleSheet(f"QFrame{{background:{bg};}}")
+
+    def _digit_in(self, digit: int):
+        if self._first is None:
+            # ── First digit ───────────────────────────────────────────────
+            self._first = digit
+            self._set_highlight(digit)
+            self._cd_secs = self.COMMIT_MS // 1000
+            self._status.setText(
+                f"Ålder {digit} – väntar {self._cd_secs}s på en siffra till …"
+            )
+            self._commit_timer.start(self.COMMIT_MS)
+            self._cd_timer.start(1000)
+        else:
+            # ── Second digit → combine and go ─────────────────────────────
+            age = self._first * 10 + digit
+            self._reset_state()
+            self.chosen.emit(age)
+
+    def _cd_tick(self):
+        self._cd_secs -= 1
+        if self._first is not None and self._cd_secs > 0:
+            self._status.setText(
+                f"Ålder {self._first} – väntar {self._cd_secs}s på en siffra till …"
+            )
+
+    def _commit_single(self):
+        age = self._first
+        self._reset_state()
+        self.chosen.emit(age)
+
+    # ── scanner stream ────────────────────────────────────────────────────
+
+    def _on_text(self, txt: str):
+        ch = txt.strip()
+        if len(ch) == 1 and ch.isdigit():
+            self._inp.clear()
+            self._digit_in(int(ch))
+        elif len(ch) > 1 and ch.isdigit() and 0 <= int(ch) <= 120:
+            # full age typed/pasted in one go (e.g. "42" + Enter via scanner)
+            age = int(ch)
+            self._reset_state()
+            self.chosen.emit(age)
+        elif len(ch) > 1:
+            self._inp.clear()
+            self._err.setText(f'Okänd inmatning: "{ch}"')
+
 
 class GenderPage(QWidget):
     chosen = pyqtSignal(str)
@@ -595,7 +765,7 @@ class GenderPage(QWidget):
 
         root.addWidget(lbl("Hej! Vem är du?", 34, True, DARK, Qt.AlignCenter))
         root.addWidget(
-            lbl("Scanna din könkod på skärmen", 16, False, MUTED, Qt.AlignCenter)
+            lbl("Scanna det som stämmer för dig på skärmen", 16, False, MUTED, Qt.AlignCenter)
         )
 
         cards_row = QHBoxLayout()
@@ -629,7 +799,7 @@ class GenderPage(QWidget):
             self._card_widgets.append(c)
         root.addLayout(cards_row)
 
-        self._inp = scanner_field("Scanna könkod...")
+        self._inp = scanner_field("Scanna alternativ...")
         self._inp.textChanged.connect(self._live)
         self._inp.returnPressed.connect(self._submit)
         root.addWidget(self._inp)
@@ -646,14 +816,14 @@ class GenderPage(QWidget):
                 ("👧", "Flicka", "girl"),
                 ("", "Annat", "other"),
             ]
-            hint = "Scanna könkod på skärmen"
+            hint = "Scanna alternativ på skärmen"
         else:
             opts = [
                 ("👨", "Man", "man"),
                 ("👩", "Kvinna", "woman"),
                 ("", "Annat", "other"),
             ]
-            hint = "Scanna könkod på skärmen"
+            hint = "Scanna alternativ på skärmen"
         print(f"Kolla vi valde den här oldern: {age}")
         for i, (emoji, label, code) in enumerate(opts):
             self._card_emojis[i].setText(emoji)
@@ -712,78 +882,6 @@ class GenderPage(QWidget):
             self._err.setText(f'Okänd kod: "{raw}" — försök igen')
 
 
-class AgePage(QWidget):
-    chosen = pyqtSignal(int)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        root = QVBoxLayout(self)
-        root.setContentsMargins(60, 40, 60, 30)
-        root.setSpacing(20)
-
-        root.addWidget(lbl("Hur gammal är du? 🎂", 34, True, DARK, Qt.AlignCenter))
-        root.addWidget(
-            lbl("Scanna din åldersgrupp på skärmen", 16, False, MUTED, Qt.AlignCenter)
-        )
-
-        cards_row = QHBoxLayout()
-        cards_row.setSpacing(16)
-        card_colors = [
-            (GREEN_L, GREEN_B),
-            (BLUE_L, BLUE_B),
-            (AMBER_L, AMBER_B),
-            (VIOLET_L, VIOLET_B),
-            (ORANGE_L, ORANGE_B),
-        ]
-        for (label, code, _), (bg, border) in zip(AGE_INTERVALS, card_colors):
-            c = make_card(bg, border)
-            v = QVBoxLayout(c)
-            v.setContentsMargins(10, 14, 10, 14)
-            v.setSpacing(10)
-            v.addWidget(lbl(label, 20, True, DARK, Qt.AlignCenter))
-            qr_lbl = QLabel()
-            qr_lbl.setAlignment(Qt.AlignCenter)
-            qr_lbl.setPixmap(make_qr_pixmap(code, 130))
-            v.addWidget(qr_lbl)
-            c.clicked.connect(lambda checked=False, k=code: self._inp.setText(k))
-            cards_row.addWidget(c)
-        root.addLayout(cards_row)
-
-        self._inp = scanner_field("Scanna ålderskoden på skärmen...", AMBER_B)
-        self._inp.textChanged.connect(self._live)
-        self._inp.returnPressed.connect(self._submit)
-        root.addWidget(self._inp)
-
-        self._err = lbl("", 13, False, RED, Qt.AlignCenter)
-        root.addWidget(self._err)
-        root.addStretch()
-
-    def showEvent(self, _):
-        self._inp.clear()
-        QTimer.singleShot(80, self._inp.setFocus)
-
-    def _live(self, txt):
-        key = txt.strip().lower()
-        if key in _AGE_MAP:
-            self._inp.clear()
-            self._err.setText("")
-            self.chosen.emit(_AGE_MAP[key])
-
-    def _submit(self):
-        txt = self._inp.text().strip().lower()
-        self._inp.clear()
-        if not txt:
-            return
-        if txt in _AGE_MAP:
-            self._err.setText("")
-            self.chosen.emit(_AGE_MAP[txt])
-        elif txt.isdigit() and 1 <= int(txt) <= 120:
-            self._err.setText("")
-            self.chosen.emit(int(txt))
-        else:
-            self._err.setText("Scanna en åldersgrupp!")
-
-
 class FoodPage(QWidget):
     calc_requested = pyqtSignal()
     reset_requested = pyqtSignal()
@@ -798,7 +896,7 @@ class FoodPage(QWidget):
         root.addWidget(lbl("Scanna din frukost! 🍽️", 30, True, DARK, Qt.AlignCenter))
         root.addWidget(
             lbl(
-                "Håll streckkoden mot scannern  ·  scanna Beräkna-koden när du är klar",
+                "Scanna matvarorna i hyllan  ·  scanna Beräkna när du är klar",
                 14,
                 False,
                 MUTED,
@@ -810,17 +908,6 @@ class FoodPage(QWidget):
         self._inp.textChanged.connect(self._live)
         self._inp.returnPressed.connect(self._submit)
         root.addWidget(self._inp)
-
-        self._fb = lbl("", 14, True, GREEN, Qt.AlignCenter)
-        root.addWidget(self._fb)
-
-        self._list_lbl = QLabel("")
-        self._list_lbl.setWordWrap(True)
-        self._list_lbl.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self._list_lbl.setStyleSheet(
-            f"color:{DARK};background:transparent;font-size:15px;"
-        )
-        root.addWidget(self._list_lbl)
 
         action_row = QHBoxLayout()
         action_row.setSpacing(16)
@@ -840,6 +927,18 @@ class FoodPage(QWidget):
             c.clicked.connect(lambda checked=False, k=code: self._inp.setText(k))
             action_row.addWidget(c)
         root.addLayout(action_row)
+
+        self._fb = lbl("", 14, True, GREEN, Qt.AlignCenter)
+        root.addWidget(self._fb)
+
+        self._list_lbl = QLabel("")
+        self._list_lbl.setWordWrap(True)
+        self._list_lbl.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self._list_lbl.setStyleSheet(
+            f"color:{DARK};background:transparent;font-size:15px;"
+        )
+        root.addWidget(self._list_lbl)
+
         root.addStretch()
 
     def reset(self):
@@ -991,7 +1090,7 @@ class ResultsPage(QWidget):
 
         # Runner
         c, v = card_vbox(BLUE_L, BLUE_B)
-        v.addWidget(lbl("🏃 Springgubbe", 17, True, "#1E40AF"))
+        v.addWidget(lbl("🏃 Kaleido", 17, True, "#1E40AF"))
         v.addWidget(hline(BLUE_B))
         spd = res["speed"]
         v.addWidget(
@@ -1027,7 +1126,7 @@ class ResultsPage(QWidget):
         c, v = card_vbox(SUGAR_L if ok else ROSE_L, GREEN_B if ok else ROSE_B)
         v.addWidget(lbl("🍬 Socker", 17, True, "#065F46" if ok else "#9F1239"))
         v.addWidget(hline(GREEN_B if ok else ROSE_B))
-        st, sc = get_status(res["sug"], 0.001, res["sug_max"])
+        st, sc = get_status(res["sug"], 0, res["sug_max"])
         v.addWidget(lbl(st, 12, True, sc))
         v.addWidget(
             lbl(f"{round(res['sug'],1)} g  /  max {res['sug_max']} g", 12, True, MUTED)
@@ -1114,7 +1213,7 @@ class MainWindow(QWidget):
         self.setStyleSheet(f"QWidget{{background:{BG};}}")
         self._gender = None
         self._age = None
-        self._tsec = 60
+        self._tsec = 200
         self._tactive = False
 
         root = QVBoxLayout(self)
@@ -1140,6 +1239,7 @@ class MainWindow(QWidget):
             self._step_labels.append(lb)
         hl.addStretch()
         self._tlbl = lbl("", 11, False, MUTED)
+        self._tlbl.setFixedWidth(120)
         hl.addWidget(self._tlbl)
         root.addWidget(hdr)
 
@@ -1188,14 +1288,14 @@ class MainWindow(QWidget):
 
     def _on_age(self, a):
         self._age = a
-        self._tsec = 60
+        self._tsec = 200
         self._p_gender.setup(a)
         self._go(1)
 
     def _on_gender(self, g):
         self._gender = g
         self._tactive = True
-        self._tsec = 60
+        self._tsec = 200
         self._p_food.reset()
         self._go(2)
 
@@ -1204,12 +1304,12 @@ class MainWindow(QWidget):
             return
         res = calc(MY_FOODS, self._p_food.food_list, self._age, self._gender)
         self._p_results.load(res, len(self._p_food.food_list))
-        self._tsec = 60
+        self._tsec = 200
         self._go(3)
 
     def _new_bkfst(self):
         self._p_food.reset()
-        self._tsec = 60
+        self._tsec = 200
         self._go(2)
 
     def _do_reset(self):
@@ -1217,7 +1317,7 @@ class MainWindow(QWidget):
         self._age = None
         self._p_food.reset()
         self._tactive = False
-        self._tsec = 60
+        self._tsec = 200
         self._tlbl.setText("")
         self._update_tbar()
         self._go(0)

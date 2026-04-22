@@ -17,7 +17,7 @@ def get_food_and_info(df):
             "Energi": row["Energi (kcal)"],
             "Fett": row["Fett, totalt (g)"],
             "Protein": row["Protein (g)"],
-            "Socker": row["Sockerarter, totalt (g)"],
+            "Socker": row["Fritt socker (g)"],
             "Fibrer": row["Fibrer (g)"],
         }
         foods[name] = value
