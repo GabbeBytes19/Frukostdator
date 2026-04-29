@@ -73,6 +73,9 @@ def estimate_weight(age):
         return age * 3 + 7
     return 75
 
+def kcal_to_kj_str(kcal):
+    kj = kcal * 4.184
+    return f"{round(kj)} kJ ({round(kcal)} kcal)"
 
 def daily_kcal(age, gender):
     if age <= 3:
@@ -889,6 +892,27 @@ class FoodPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.food_list = []
+        self.food_counts = {}
+        self.food_display_map = {
+            "mellanmjölk fett 1,5% berikad": ("glas mjölk", "glas mjölk"),
+            "fruktyoghurt fett 2%": ("skål yoghurt", "skålar yoghurt"),
+            "apelsinjuice drickf.": ("glas apelsinjuice", "glas apelsinjuice"),
+            "ägg kokt": ("kokt ägg", "kokta ägg"),
+            "påläggskorv salami rökt": ("skiva salami", "skivor salami"),
+            "ost hårdost fett 28%": ("skiva ost", "skivor ost"),
+            "smör normalsaltat": ("smör", "smör"),
+            "jordgubbssylt": ("jordgubbssylt", "jordgubbssylt"),
+            "nötkräm chokladkräm": ("chokladkräm", "chokladkräm"),
+            "bröd fullkorn råg fibrer ca 7%": ("skiva mörkt bröd", "skivor mörkt bröd"),
+            "bröd vitt fibrer ca 5% typ formfranska": ("skiva ljust bröd", "skivor ljust bröd"),
+            "havregryn fullkorn": ("dl havregryn", "dl havregryn"),
+            "frukostflingor müsli fullkorn m. frukt": ("portion müsli", "portioner müsli"),
+            "frukostflingor ris puffat m. socker berikad": ("portion flingor", "portioner flingor"),
+            "mjölkchoklad": ("chokladkaka", "chokladkakor"),
+            "munk u. fyllning": ("munk", "munkar"),
+            "äpple m. skal": ("äpple", "äpplen"),
+            "banan": ("banan", "bananer"),
+        }
         root = QVBoxLayout(self)
         root.setContentsMargins(60, 30, 60, 30)
         root.setSpacing(14)
@@ -943,6 +967,7 @@ class FoodPage(QWidget):
 
     def reset(self):
         self.food_list = []
+        self.food_counts = {}
         self._inp.clear()
         self._fb.setText("")
         self._list_lbl.setText("")
@@ -984,11 +1009,23 @@ class FoodPage(QWidget):
 
     def _add(self, key):
         self.food_list.append(key)
+
+        if key in self.food_counts:
+            self.food_counts[key] += 1
+        else:
+            self.food_counts[key] = 1
+
         self._inp.clear()
         self._fb.setStyleSheet(f"color:{GREEN};background:transparent;")
         self._fb.setText(f"✅  Tillagd: {key}!")
-        lines = "\n".join(f"  {i+1}.  {name}" for i, name in enumerate(self.food_list))
-        self._list_lbl.setText(lines)
+
+        lines = []
+        for food, count in self.food_counts.items():
+            singular, plural = self.food_display_map.get(food, (food, food))
+            name = singular if count == 1 else plural
+            lines.append(f"  {count} {name}")
+
+        self._list_lbl.setText("\n".join(lines))
         QTimer.singleShot(60, self._inp.setFocus)
 
 
@@ -1074,13 +1111,20 @@ class ResultsPage(QWidget):
         v.addWidget(hline(AMBER_B))
         st, sc = get_status(res["kcal"], res["kcal_min"], res["kcal_max"])
         v.addWidget(lbl(st, 12, True, sc))
-        v.addWidget(lbl(f"{round(res['kcal'])} kcal", 32, True, AMBER, Qt.AlignCenter))
+        v.addWidget(lbl(kcal_to_kj_str(res['kcal']), 32, True, AMBER, Qt.AlignCenter))
         v.addWidget(
-            lbl(f"Mål: {res['kcal_min']}–{res['kcal_max']} kcal", 12, True, "#92400E")
+            lbl(
+                f"Mål: {round(res['kcal_min']*4.184)}–{round(res['kcal_max']*4.184)} kJ "
+                f"({res['kcal_min']}–{res['kcal_max']} kcal)",
+                12,
+                True,
+                "#92400E",
+            )
         )
         v.addWidget(
             lbl(
-                f"{res['pct']}% av dagsbehovet ({round(res['daily'])} kcal)",
+                f"{res['pct']}% av dagsbehovet "
+                f"({round(res['daily']*4.184)} kJ / {round(res['daily'])} kcal)",
                 12,
                 True,
                 MUTED,
@@ -1147,7 +1191,7 @@ class ResultsPage(QWidget):
         )
         v.addWidget(
             lbl(
-                f"Dagsbudget: {res['fat_min_d']}–{res['fat_max_d']} g",
+                f"Dagsbehov: {res['fat_min_d']}–{res['fat_max_d']} g",
                 12,
                 True,
                 MUTED,
@@ -1169,7 +1213,7 @@ class ResultsPage(QWidget):
         )
         v.addWidget(
             lbl(
-                f"Dagsbudget: {res['pro_min_d']}–{res['pro_max_d']} g",
+                f"Dagsbehov: {res['pro_min_d']}–{res['pro_max_d']} g",
                 12,
                 True,
                 MUTED,
@@ -1182,10 +1226,13 @@ class ResultsPage(QWidget):
         c, v = card_vbox("#F0FDFA", "#5EEAD4")
         v.addWidget(lbl("🌾 Fibrer", 17, True, "#0F766E"))
         v.addWidget(hline("#5EEAD4"))
-        st, sc = get_status(res["fiber"], res["fiber_min"], res["fiber_max"])
+        if res["fiber"] < res["fiber_min"]:
+            st, sc = "⚠  Lite för lite", AMBER
+        else:
+            st, sc = "✓  Perfekt!", GREEN
         v.addWidget(lbl(st, 12, True, sc))
         v.addWidget(
-            CircleWidget(res["fiber"], res["fiber_min"], res["fiber_max"], "#14B8A6"),
+            CircleWidget(res["fiber"], res["fiber_min"], max(res["fiber"], res["fiber_max"]), "#14B8A6"),
             0,
             Qt.AlignCenter,
         )
@@ -1226,7 +1273,11 @@ class MainWindow(QWidget):
         hdr.setStyleSheet("background:white;border-bottom:4px solid #FCD34D;")
         hl = QHBoxLayout(hdr)
         hl.setContentsMargins(24, 0, 24, 0)
-        hl.addWidget(lbl("🍳 Frukostdatorn", 20, True, AMBER))
+        logo = QLabel()
+        logo.setPixmap(QPixmap("logga_magasinet.png").scaled(90, 90, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        logo.setStyleSheet("background:transparent;border:none;")
+        hl.addWidget(logo)
+        hl.addWidget(lbl(" Frukostdatorn", 20, True, AMBER))
         hl.addStretch()
         self._step_labels = []
         for s in ("🔢 Ålder", "👤 Vem", "🍎 Frukost", "✨ Resultat"):
@@ -1238,9 +1289,23 @@ class MainWindow(QWidget):
             hl.addWidget(lb)
             self._step_labels.append(lb)
         hl.addStretch()
-        self._tlbl = lbl("", 11, False, MUTED)
-        self._tlbl.setFixedWidth(120)
-        hl.addWidget(self._tlbl)
+
+        right_box = QWidget()
+        right_layout = QVBoxLayout(right_box)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
+
+        self._source_lbl = lbl("Källa: Livsmedelsverket", 11, False, MUTED, Qt.AlignRight)
+        self._tlbl = lbl("", 11, False, MUTED, Qt.AlignRight)
+        self._tlbl.setFixedWidth(140)
+        self._tlbl.setStyleSheet(f"color:{MUTED}; background:transparent; border:none;")
+        self._source_lbl.setFixedWidth(140)
+
+        right_layout.addWidget(self._tlbl)
+        right_layout.addWidget(self._source_lbl)
+        
+
+        hl.addWidget(right_box)
         root.addWidget(hdr)
 
         # Timer strip
@@ -1279,6 +1344,7 @@ class MainWindow(QWidget):
         self._update_tbar()
 
     def _go(self, idx):
+        self._source_lbl.setVisible(idx == 3)
         self._stack.setCurrentIndex(idx)
         ACTIVE = f"background:{AMBER_B};color:#78350F;border-radius:11px;padding:4px 12px;font-weight:bold;font-size:12px;"
         DONE = f"background:{GREEN_L};color:#065F46;border-radius:11px;padding:4px 12px;font-weight:bold;font-size:12px;"
