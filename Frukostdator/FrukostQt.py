@@ -900,7 +900,7 @@ class FoodPage(QWidget):
             "ägg kokt": ("kokt ägg", "kokta ägg"),
             "påläggskorv salami rökt": ("skiva salami", "skivor salami"),
             "ost hårdost fett 28%": ("skiva ost", "skivor ost"),
-            "smör normalsaltat": ("smör", "smör"),
+            "smör fett 80%": ("smör", "smör"),
             "jordgubbssylt": ("jordgubbssylt", "jordgubbssylt"),
             "nötkräm chokladkräm": ("chokladkräm", "chokladkräm"),
             "bröd fullkorn råg fibrer ca 7%": ("skiva mörkt bröd", "skivor mörkt bröd"),
@@ -1017,7 +1017,8 @@ class FoodPage(QWidget):
 
         self._inp.clear()
         self._fb.setStyleSheet(f"color:{GREEN};background:transparent;")
-        self._fb.setText(f"✅  Tillagd: {key}!")
+        singular, plural = self.food_display_map.get(key, (key, key))
+        self._fb.setText(f"✅  Tillagd: {singular}!")
 
         lines = []
         for food, count in self.food_counts.items():

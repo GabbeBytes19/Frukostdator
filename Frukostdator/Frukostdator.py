@@ -4,7 +4,7 @@ import pandas as pd
 PORTION_WEIGHTS = {
     "mellanmjölk fett 1,5% berikad": 250,
     "ägg kokt": 60,
-    "smör normalsaltat": 10,
+    "smör fett 80%": 10,
     "ost hårdost fett 28%": 20,
     "bröd fullkorn råg fibrer ca 7%": 35,
     "bröd vitt fibrer ca 5% typ formfranska": 35,
