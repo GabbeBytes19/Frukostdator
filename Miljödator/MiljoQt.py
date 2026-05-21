@@ -883,11 +883,23 @@ class MainWindow(QWidget):
 
     def _new_scan(self):
         self._p_food.reset()
+
+        # Återställ alltid resultatsidan till meal-läge
+        self._p_results._current_mode = "meal"
+        self._p_results._toggle._current = "meal"
+        self._p_results._toggle._refresh()
+
         self._tsec = 200
         self._go(0)
 
     def _do_reset(self):
         self._p_food.reset()
+
+        # Återställ alltid resultatsidan till meal-läge
+        self._p_results._current_mode = "meal"
+        self._p_results._toggle._current = "meal"
+        self._p_results._toggle._refresh()
+
         self._tactive = False
         self._tsec    = 200
         self._tlbl.setText("")
