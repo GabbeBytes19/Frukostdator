@@ -1134,6 +1134,7 @@ class ResultsPage(QWidget):
         self._grid.addWidget(c, 0, 0, 1, 2)  # Energy spans 2 cols
 
         # Runner
+# Runner
         c, v = card_vbox(BLUE_L, BLUE_B)
         v.addWidget(lbl("🏃 Kaleido", 17, True, "#1E40AF"))
         v.addWidget(hline(BLUE_B))
@@ -1152,7 +1153,14 @@ class ResultsPage(QWidget):
         )
         rw = RunnerWidget()
         rw.set_speed(spd)
-        v.addWidget(rw, 0, Qt.AlignCenter)
+        rw_container = QWidget()
+        rw_container.setFixedHeight(100)
+        rw_container.setStyleSheet("background:transparent;")
+        rw_layout = QHBoxLayout(rw_container)
+        rw_layout.setContentsMargins(0, 0, 0, 0)
+        rw_layout.addWidget(rw, 0, Qt.AlignCenter)
+        v.addWidget(rw_container)
+        v.addStretch()
         self._grid.addWidget(c, 0, 2)
 
         # Distance
@@ -1278,7 +1286,15 @@ class MainWindow(QWidget):
         logo.setPixmap(QPixmap("logga_magasinet.png").scaled(90, 90, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         logo.setStyleSheet("background:transparent;border:none;")
         hl.addWidget(logo)
-        hl.addWidget(lbl(" Frukostdatorn", 20, True, AMBER))
+        title_lbl = lbl(" Frukostdatorn", 20, True, AMBER)
+        title_lbl.setStyleSheet(
+            f"color:{AMBER};"
+            "background:transparent;"
+            "border:none;"
+            "margin-top:16px;"
+        )
+
+        hl.addWidget(title_lbl)
         hl.addStretch()
         self._step_labels = []
         for s in ("🔢 Ålder", "👤 Vem", "🍎 Frukost", "✨ Resultat"):
