@@ -35,51 +35,36 @@ import Miljodator
 MY_FOODS = Miljodator.get_food_impacts()
 
 # ── Färgpalett ────────────────────────────────────────────────────────────
-# Gröna primärfärger (användarpecifierade):
-#   #548665  – djupgrönt   (primärt: knappar, rubriker, aktiva element)
-#   #6D9077  – mellangrönt (kantlinjer, detaljer)
-#   #97AA9B  – ljusgrönt   (bakgrunder, kort)
-# Komplementfärger för kontrast och variation:
-#   Varmt amber/guld för markkort
-#   Blå för vattenkort
-#   Lila för toggle-knapp
-# Logotypfärger från logga_magasinet.png:
-#   #005850  – mörkgrön teal (header-text)
+BG       = "#F2F6F3"
+DARK     = "#1A2B1E"
+MUTED    = "#4A6655"
 
-BG       = "#F2F6F3"   # mycket ljus grön bakgrund, baserad på #97AA9B
-DARK     = "#1A2B1E"   # nästan svart mörkgrön text
-MUTED    = "#4A6655"   # dämpad mellangrön text
+PRIMARY  = "#548665"
+PRIMARY_L= "#E4EDE7"
+PRIMARY_B= "#6D9077"
 
-PRIMARY  = "#548665"   # djupgrönt – rubriker, knappar, aktiva element
-PRIMARY_L= "#E4EDE7"   # ljus variant av #97AA9B – kortbakgrund
-PRIMARY_B= "#6D9077"   # mellangrönt – kantlinjer
+ACCENT   = "#3D6B50"
+ACCENT_L = "#D6E5DA"
+ACCENT_B = "#97AA9B"
 
-ACCENT   = "#3D6B50"   # mörkare accent av #548665 – feedback, hover
-ACCENT_L = "#D6E5DA"   # ljus accent
-ACCENT_B = "#97AA9B"   # ljusgrönt – sekundär kantlinje
+LOGO_TEAL = "#005850"
 
-LOGO_TEAL = "#005850"  # mörkgrön teal – logotypens textfärg (header-text)
+MAUVE    = "#5C3D7A"
+MAUVE_L  = "#EDE8F4"
+MAUVE_B  = "#9B7DC0"
 
-# Komplementfärg: lila/mörklila – toggle-knapp, Börja om (kontrast mot grönt)
-MAUVE    = "#5C3D7A"   # djupt lila
-MAUVE_L  = "#EDE8F4"   # ljus lila kortbakgrund
-MAUVE_B  = "#9B7DC0"   # mellanlila kantlinje
+EARTH    = "#7A4F1A"
+EARTH_L  = "#FBF0E0"
+EARTH_B  = "#C49040"
 
-# Markkort: varm amber – komplementär kontrast mot grönt
-EARTH    = "#7A4F1A"   # amber/brun rubrik
-EARTH_L  = "#FBF0E0"   # ljus amber kortbakgrund
-EARTH_B  = "#C49040"   # amber kantlinje
-
-# Vattenkort: djupblå – stark kontrast mot grönt
-WATER_D  = "#1A4F7A"   # djupblå rubrik
-WATER_L  = "#DDF0FB"   # ljus blå kortbakgrund
-WATER_B  = "#7BB8D8"   # blå kantlinje
+WATER_D  = "#1A4F7A"
+WATER_L  = "#DDF0FB"
+WATER_B  = "#7BB8D8"
 
 RED      = "#C0392B"
 RED_L    = "#FDECEA"
 RED_B    = "#E8857C"
 
-# Distinkta segmentfärger för donut-diagram
 SEGMENT_COLORS = [
     "#4CAF50", "#2196F3", "#FF9800", "#9C27B0", "#00BCD4",
     "#F44336", "#8BC34A", "#FF5722", "#3F51B5", "#009688",
@@ -87,12 +72,10 @@ SEGMENT_COLORS = [
     "#03A9F4", "#FF4081", "#69F0AE",
 ]
 
-# ── Verkliga jämförelser per enhet ────────────────────────────────────────
-# Används för att omvandla totaler till begripliga jämförelser.
-#   CO2 : 1 km bilkörning ≈ 0.21 kg CO2e  (genomsnittlig personbil)
-#   Land: 1 m²/år ≈ en A4-sida = 0.0623 m²  → vi jämför med pizzor (0.28 m²)
-#   Water: 1 minuts duschning ≈ 9 liter
+# ── WWF one planet plate threshold ───────────────────────────────────────
+WWF_CO2_LIMIT = 0.5   # kg CO2e per måltid
 
+# ── Verkliga jämförelser per enhet ────────────────────────────────────────
 def co2_comparison(kg: float) -> str:
     km = kg / 0.21
     if km < 1:
@@ -101,10 +84,8 @@ def co2_comparison(kg: float) -> str:
     return f"≈ {km:.1f} km bilkörning"
 
 def land_comparison(m2: float) -> str:
-    # Jämför alltid med antal A4-ark (0.0623 m²), avrundat till närmaste 0.5
     A4 = 0.0623
     sheets_raw = m2 / A4
-    # Avrunda till närmaste 0.5
     sheets = round(sheets_raw * 2) / 2
     if sheets == int(sheets):
         sheets_str = str(int(sheets))
@@ -143,7 +124,6 @@ def hline(color=None):
 
 
 class ClickableCard(QFrame):
-    """Kortwidget med synlig kantlinje BARA på sig själv."""
     clicked = pyqtSignal()
 
     def __init__(self, bg, border, parent=None):
@@ -206,17 +186,218 @@ def make_qr_pixmap(data: str, size: int = 150) -> QPixmap:
     return px
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# PLANET WIDGET  (ny funktion – WWF one planet plate)
+# ══════════════════════════════════════════════════════════════════════════
+
+class PlanetWidget(QWidget):
+    """
+    Visar en animerad planet och ett budskap baserat på om måltiden
+    ligger under eller över WWF:s gräns för "One Planet Plate" (0,5 kg CO2e).
+
+    Under gränsen → grön glad planet med leende
+    Över gränsen  → röd/orange ledsen planet med rök-/flammografik
+    Pulsanimation gör planeten levande.
+    """
+
+    ANIM_MS = 40   # timer-intervall i ms
+
+    def __init__(self, co2_kg: float, parent=None):
+        super().__init__(parent)
+        self.co2_kg = co2_kg
+        self._good  = co2_kg <= WWF_CO2_LIMIT
+        self._t     = 0.0          # animationsparameter 0..2π
+
+        self.setFixedHeight(160)
+        self.setMinimumWidth(400)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+
+        self._anim = QTimer(self)
+        self._anim.timeout.connect(self._tick)
+        self._anim.start(self.ANIM_MS)
+
+    def _tick(self):
+        import math
+        self._t = (self._t + 0.06) % (2 * math.pi)
+        self.update()
+
+    def paintEvent(self, _):
+        import math
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+
+        w = self.width()
+        h = self.height()
+
+        # ── Planeten ──────────────────────────────────────────────────────
+        pulse = math.sin(self._t) * 3          # ±3 px puls
+        R     = int(h * 0.38) + int(pulse)
+        cx    = w // 2
+        cy    = h // 2 + 5
+
+        if self._good:
+            planet_col  = QColor("#27AE60")
+            shadow_col  = QColor("#1E8449")
+            shine_col   = QColor("#A9DFBF")
+            bg_glow     = QColor(39, 174, 96, 30)
+        else:
+            planet_col  = QColor("#E74C3C")
+            shadow_col  = QColor("#C0392B")
+            shine_col   = QColor("#F1948A")
+            bg_glow     = QColor(231, 76, 60, 30)
+
+        # Glöd-ring runt planeten
+        for r_off in range(18, 0, -2):
+            alpha = int(40 * (1 - r_off / 18))
+            glow = QColor(planet_col)
+            glow.setAlpha(alpha)
+            p.setPen(Qt.NoPen)
+            p.setBrush(glow)
+            p.drawEllipse(QRectF(cx - R - r_off, cy - R - r_off,
+                                 (R + r_off) * 2, (R + r_off) * 2))
+
+        # Planetshadow
+        p.setPen(Qt.NoPen)
+        p.setBrush(shadow_col)
+        p.drawEllipse(QRectF(cx - R + 4, cy - R + 6, R * 2, R * 2))
+
+        # Planetkropp
+        p.setBrush(planet_col)
+        p.drawEllipse(QRectF(cx - R, cy - R, R * 2, R * 2))
+
+        # Glansreflex uppe till vänster
+        p.setBrush(shine_col)
+        sr = int(R * 0.35)
+        p.drawEllipse(QRectF(cx - R + int(R * 0.15), cy - R + int(R * 0.10), sr, int(sr * 0.65)))
+
+        # ── Ansikte ───────────────────────────────────────────────────────
+        eye_r = max(3, R // 8)
+        eye_y = cy - R // 5
+        eye_off = R // 3
+
+        p.setBrush(QColor("white"))
+        p.setPen(Qt.NoPen)
+        p.drawEllipse(QRectF(cx - eye_off - eye_r, eye_y - eye_r, eye_r * 2, eye_r * 2))
+        p.drawEllipse(QRectF(cx + eye_off - eye_r, eye_y - eye_r, eye_r * 2, eye_r * 2))
+
+        pupil_r = max(2, eye_r // 2)
+        p.setBrush(QColor("#1A1A1A"))
+        if self._good:
+            p.drawEllipse(QRectF(cx - eye_off - pupil_r, eye_y - pupil_r, pupil_r * 2, pupil_r * 2))
+            p.drawEllipse(QRectF(cx + eye_off - pupil_r, eye_y - pupil_r, pupil_r * 2, pupil_r * 2))
+        else:
+            # Arga ögonbryn + pupiller nedåt
+            brow_pen = QPen(QColor("#1A1A1A"), max(2, eye_r // 3))
+            brow_pen.setCapStyle(Qt.RoundCap)
+            p.setPen(brow_pen)
+            # vänster ögonbryn lutande ner mot mitten
+            p.drawLine(int(cx - eye_off - eye_r), int(eye_y - eye_r - 3),
+                       int(cx - eye_off + eye_r), int(eye_y - eye_r + 3))
+            # höger ögonbryn
+            p.drawLine(int(cx + eye_off - eye_r), int(eye_y - eye_r + 3),
+                       int(cx + eye_off + eye_r), int(eye_y - eye_r - 3))
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor("#1A1A1A"))
+            p.drawEllipse(QRectF(cx - eye_off - pupil_r, eye_y, pupil_r * 2, pupil_r * 2))
+            p.drawEllipse(QRectF(cx + eye_off - pupil_r, eye_y, pupil_r * 2, pupil_r * 2))
+
+        # Mun
+        mouth_y = cy + R // 4
+        mouth_w = R // 2
+        mouth_pen = QPen(QColor("white"), max(2, R // 10))
+        mouth_pen.setCapStyle(Qt.RoundCap)
+        p.setPen(mouth_pen)
+        p.setBrush(Qt.NoBrush)
+        if self._good:
+            # Leende bågmun
+            from PyQt5.QtCore import QRect
+            p.drawArc(QRect(cx - mouth_w, mouth_y - mouth_w // 2,
+                            mouth_w * 2, mouth_w),
+                      200 * 16, 140 * 16)
+        else:
+            # Sur nedåtbågmun
+            from PyQt5.QtCore import QRect
+            p.drawArc(QRect(cx - mouth_w, mouth_y,
+                            mouth_w * 2, mouth_w),
+                      20 * 16, 140 * 16)
+
+        # ── Extra grafik beroende på läge ─────────────────────────────────
+        if self._good:
+            # Stjärnor runt planeten
+            star_data = [(-R*1.6, -R*0.6), (R*1.5, -R*0.8), (-R*1.3, R*0.5), (R*1.4, R*0.3)]
+            star_pulse = math.sin(self._t * 1.5)
+            for sx_off, sy_off in star_data:
+                sx = cx + int(sx_off)
+                sy = cy + int(sy_off)
+                sr2 = max(3, int(5 + star_pulse * 1.5))
+                p.setPen(Qt.NoPen)
+                p.setBrush(QColor("#F9E79F"))
+                self._draw_star(p, sx, sy, sr2)
+
+        # ── Textbanner till höger av planeten ─────────────────────────────
+        text_x = cx + R + 26
+        text_w = w - text_x - 10
+
+        if self._good:
+            badge_bg  = QColor("#D5F5E3")
+            badge_brd = QColor(PRIMARY)
+            head_col  = QColor(PRIMARY)
+            head_text = "🌍  One Planet Plate!"
+            sub_text  = (f"Din måltid släpper ut {self.co2_kg:.2f} kg CO₂e -\n"
+                         f"under WWF:s gräns på {WWF_CO2_LIMIT} kg.\nBra jobbat!")
+        else:
+            badge_bg  = QColor("#FADBD8")
+            badge_brd = QColor(RED)
+            head_col  = QColor(RED)
+            head_text = "🌡️  Över One Planet Plate"
+            sub_text  = (f"Din måltid släpper ut {self.co2_kg:.2f} kg CO₂e -\n"
+                         f"WWF:s mål är under {WWF_CO2_LIMIT} kg.\n"
+                         f"Prova att byta ut något!")
+
+        # Badge-bakgrund
+        bpad = 12
+        badge_rect = QRectF(text_x - bpad, cy - 58, text_w + bpad, 116)
+        p.setBrush(badge_bg)
+        p.setPen(QPen(badge_brd, 2))
+        p.drawRoundedRect(badge_rect, 14, 14)
+
+        # Rubrik
+        fh = QFont()
+        fh.setBold(True)
+        fh.setPointSize(15)
+        p.setFont(fh)
+        p.setPen(head_col)
+        p.drawText(QRectF(text_x, cy - 50, text_w, 28), Qt.AlignVCenter | Qt.AlignLeft, head_text)
+
+        # Brödtext
+        fs = QFont()
+        fs.setPointSize(11)
+        p.setFont(fs)
+        p.setPen(QColor(DARK))
+        p.drawText(QRectF(text_x, cy - 18, text_w, 76),
+                   Qt.AlignLeft | Qt.AlignTop | Qt.TextWordWrap, sub_text)
+
+    @staticmethod
+    def _draw_star(painter, cx, cy, r):
+        import math
+        from PyQt5.QtCore import QPointF
+        from PyQt5.QtGui import QPolygonF
+        pts = []
+        for i in range(10):
+            angle = math.pi / 5 * i - math.pi / 2
+            rad   = r if i % 2 == 0 else r * 0.45
+            pts.append(QPointF(cx + math.cos(angle) * rad, cy + math.sin(angle) * rad))
+        painter.drawPolygon(QPolygonF(pts))
+
+    def closeEvent(self, e):
+        self._anim.stop()
+        super().closeEvent(e)
+
+
 # ── Lägesväxlare (kortknapp med QR-kod) ──────────────────────────────────
 class ModeToggle(QWidget):
-    """
-    En kortknapp som ser ut som 'Ny scanning'.
-    Visar alltid det ANDRA läget som nästa åtgärd (dvs. vad man byter TILL).
-    Sänder mode_changed(str) med "meal" eller "per_kg".
-    Scanner-koden är alltid "byt läge".
-    """
     mode_changed = pyqtSignal(str)
 
-    # (current_mode) → (label på knappen, scanner-kod)
     _LABELS = {
         "meal":   ("📊 Jämför livsmedel per kg",    "byt lage"),
         "per_kg": ("🍽️ Visa din måltid", "byt lage"),
@@ -252,7 +433,6 @@ class ModeToggle(QWidget):
         self.mode_changed.emit(self._current)
 
     def activate_via_scanner(self):
-        """Anropas när skannern läser 'byt läge'."""
         self._toggle()
 
     def current(self) -> str:
@@ -266,12 +446,6 @@ class ModeToggle(QWidget):
 
 # ── Staplad donut-widget ──────────────────────────────────────────────────
 class StackedDonutWidget(QWidget):
-    """
-    Ringdiagram: varje unikt livsmedel = ett färgat bågssegment (adderar till 100 %).
-    Totalvärdet och enheten visas i mitten.
-    Färgkodad förklaring nedanför med kortnamn + procent + värde.
-    """
-
     LEGEND_ROW = 20
     LEGEND_DOT = 8
 
@@ -284,7 +458,6 @@ class StackedDonutWidget(QWidget):
         self.total     = total
         self.unit      = unit
         self.color_map = color_map
-        # label_map: {scanner_name: display_label} – om None används strippad nyckel
         self.label_map = label_map or {}
 
         n = len(breakdown)
@@ -302,18 +475,15 @@ class StackedDonutWidget(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         w = self.width()
 
-        # Geometri
         size  = min(w, self._donut_h) - 25
         cx    = w // 2
         cy    = self._donut_h // 2
         R     = max(40, size // 2)
         thick = max(10, min(R // 4, 30))
 
-        # Bakgrundsspår
         p.setPen(QPen(QColor("#E5E7EB"), thick, Qt.SolidLine, Qt.FlatCap))
         p.drawArc(QRectF(cx - R, cy - R, R * 2, R * 2), 0, 360 * 16)
 
-        # Segment (kl 12, medurs)
         start_angle = 90 * 16
         for i, item in enumerate(self.breakdown):
             v    = item[self.metric]
@@ -326,13 +496,11 @@ class StackedDonutWidget(QWidget):
             p.drawArc(QRectF(cx - R, cy - R, R * 2, R * 2), start_angle, span)
             start_angle += span
 
-        # Vit mitt (hålet)
         inn = R - thick // 2 - 2
         p.setPen(Qt.NoPen)
         p.setBrush(Qt.white)
         p.drawEllipse(QRectF(cx - inn, cy - inn, inn * 2, inn * 2))
 
-        # Centraltext: värde
         if self.total < 10:
             val_str = f"{self.total:.2f}"
         elif self.total < 100:
@@ -357,7 +525,6 @@ class StackedDonutWidget(QWidget):
             val_str,
         )
 
-        # Enhet under värdet
         fu = QFont()
         fu.setPointSize(9)
         p.setFont(fu)
@@ -370,7 +537,6 @@ class StackedDonutWidget(QWidget):
             self.unit,
         )
 
-        # Förklaring nedanför
         fn = QFont()
         fn.setPointSize(8)
         p.setFont(fn)
@@ -423,6 +589,111 @@ class StackedDonutWidget(QWidget):
             )
 
 
+# ── Horisontellt stapeldiagram (per kg-läge) ──────────────────────────────
+class HBarChartWidget(QWidget):
+    """
+    Visar ett horisontellt stapeldiagram där varje livsmedel får en rad.
+    Staplarna är proportionella mot det högsta värdet i serien.
+    Samma färger och namnförkortningar som StackedDonutWidget används.
+    """
+
+    ROW_H   = 28   # höjd per stapelrad
+    ROW_GAP = 6    # mellanrum mellan rader
+    LBL_W   = 110  # bredd för livsmedelsnamnet till vänster
+    VAL_W   = 68   # bredd för värdetexten till höger
+    BAR_R   = 5    # hörnradie på staplarna
+
+    def __init__(self, breakdown: list, metric: str,
+                 unit: str, color_map: dict, parent=None):
+        super().__init__(parent)
+        self.breakdown = breakdown
+        self.metric    = metric
+        self.unit      = unit
+        self.color_map = color_map
+
+        n = len(breakdown)
+        total_h = n * (self.ROW_H + self.ROW_GAP) + 4
+        self.setFixedHeight(total_h)
+        self.setMinimumWidth(260)
+
+    @staticmethod
+    def _short_name(raw: str) -> str:
+        return (raw
+            .replace("fibrer ca 7%", "").replace("fibrer ca 5% typ formfranska", "")
+            .replace("fett 1,5% berikad", "").replace("fett 2%", "")
+            .replace("fett 80%", "").replace("fett 28%", "")
+            .replace("fullkorn", "").replace("m. skal", "")
+            .replace("drickf.", "").replace("u. fyllning", "")
+            .replace("  ", " ").strip().capitalize()
+        )
+
+    def paintEvent(self, _):
+        if not self.breakdown:
+            return
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        w = self.width()
+
+        max_val = max((item[self.metric] for item in self.breakdown), default=1.0)
+        if max_val <= 0:
+            max_val = 1.0
+
+        bar_area_w = w - self.LBL_W - self.VAL_W - 8
+
+        fn = QFont()
+        fn.setPointSize(8)
+        p.setFont(fn)
+        fm = QFontMetrics(fn)
+
+        for i, item in enumerate(self.breakdown):
+            val   = item[self.metric]
+            color = QColor(self.color_map.get(
+                item["name"], SEGMENT_COLORS[i % len(SEGMENT_COLORS)]
+            ))
+            y = i * (self.ROW_H + self.ROW_GAP) + 2
+
+            # ── Livsmedelsnamn (vänster) ──────────────────────────────────
+            name = self._short_name(item["name"])
+            name = fm.elidedText(name, Qt.ElideRight, self.LBL_W - 4)
+            p.setPen(QColor(DARK))
+            p.drawText(
+                QRectF(0, y, self.LBL_W - 4, self.ROW_H),
+                Qt.AlignVCenter | Qt.AlignLeft,
+                name,
+            )
+
+            # ── Bakgrundsspår ─────────────────────────────────────────────
+            track_x = self.LBL_W
+            track_rect = QRectF(track_x, y + 4, bar_area_w, self.ROW_H - 8)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor("#E5E7EB"))
+            p.drawRoundedRect(track_rect, self.BAR_R, self.BAR_R)
+
+            # ── Färgad stapel ─────────────────────────────────────────────
+            frac    = val / max_val
+            bar_w   = max(self.BAR_R * 2, int(bar_area_w * frac))
+            bar_rect = QRectF(track_x, y + 4, bar_w, self.ROW_H - 8)
+            p.setBrush(color)
+            p.drawRoundedRect(bar_rect, self.BAR_R, self.BAR_R)
+
+            # ── Värdetext (höger) ─────────────────────────────────────────
+            if val < 10:
+                val_str = f"{val:.2f} {self.unit}"
+            elif val < 100:
+                val_str = f"{val:.1f} {self.unit}"
+            else:
+                val_str = f"{round(val)} {self.unit}"
+
+            val_x = track_x + bar_area_w + 6
+            p.setPen(QColor(MUTED))
+            p.drawText(
+                QRectF(val_x, y, self.VAL_W, self.ROW_H),
+                Qt.AlignVCenter | Qt.AlignLeft,
+                val_str,
+            )
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # SIDOR
 # ══════════════════════════════════════════════════════════════════════════
@@ -436,8 +707,6 @@ class FoodPage(QWidget):
         self.food_list   = []
         self.food_counts = {}
 
-        # (singular med portionstyp, plural med portionstyp)
-        # Används på måltidsskärmen med portionsvikter.
         self.food_display_map = {
             "mellanmjölk fett 1,5% berikad":                ("glas mjölk",        "glas mjölk"),
             "fruktyoghurt fett 2%":                         ("skål yoghurt",       "skålar yoghurt"),
@@ -566,13 +835,8 @@ class FoodPage(QWidget):
 
 # ── ResultsPage ───────────────────────────────────────────────────────────
 class ResultsPage(QWidget):
-    """
-    Resultatsida med två lägen: 'Din måltid' och 'Per kg'.
-    Läget väljs via ModeToggle och uppdaterar alla tre kort dynamiskt.
-    """
     new_scan = pyqtSignal()
 
-    # Kortdefinitioner: (metric, titel, enhet, bg, border, rubrikfärg, jämförelsefunktion)
     CARDS = [
         ("CO2",   "🌱 Växthusgaser (CO₂e)", "kg CO₂e", PRIMARY_L, PRIMARY_B, PRIMARY,   co2_comparison),
         ("Land",  "🌾 Markanvändning",       "m²/år",   EARTH_L,   EARTH_B,   EARTH,     land_comparison),
@@ -581,8 +845,9 @@ class ResultsPage(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._current_mode = "meal"   # "meal" | "per_kg"
-        self._last_food_list = []     # sparas för omberäkning vid lägesbyte
+        self._current_mode   = "meal"
+        self._last_food_list = []
+        self._planet_widget  = None   # hålls i minnet för att stoppa animatorn
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(24, 16, 24, 16)
@@ -591,28 +856,31 @@ class ResultsPage(QWidget):
         # Rubrik
         self._title = lbl(
             "Så mycket klimatpåverkan har din måltid",
-            24,
-            True,
-            PRIMARY,
-            Qt.AlignCenter,
+            24, True, PRIMARY, Qt.AlignCenter,
         )
         outer.addWidget(self._title)
 
         self._subtitle = lbl(
             "Baserat på portionsstorlek och antal",
-            14,
-            False,
-            MUTED,
-            Qt.AlignCenter,
+            14, False, MUTED, Qt.AlignCenter,
         )
         outer.addWidget(self._subtitle)
 
-        # Kortnät (3 kolumner)
+        # ── Planet-banner-plats (byts ut vid render) ──────────────────────
+        # stretch=1 → planet absorbs spare vertical space; grid stays at its
+        # natural height, so the bottom buttons are never pushed off-screen.
+        self._planet_container = QWidget()
+        self._planet_container.setStyleSheet("background:transparent;border:none;")
+        self._planet_layout = QVBoxLayout(self._planet_container)
+        self._planet_layout.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(self._planet_container, 1)   # ← stretch=1
+
+        # Kortnät (3 kolumner) – stretch=0 so it only takes what it needs
         self._grid_w = QWidget()
         self._grid_w.setStyleSheet("background:transparent;border:none;")
         self._grid   = QGridLayout(self._grid_w)
         self._grid.setSpacing(14)
-        outer.addWidget(self._grid_w, 1)
+        outer.addWidget(self._grid_w, 0)             # ← stretch=0
 
         # Skanningsfält
         self._inp = scanner_field("Scanna koden på skärmen...", PRIMARY_B)
@@ -620,7 +888,7 @@ class ResultsPage(QWidget):
         self._inp.returnPressed.connect(self._submit)
         outer.addWidget(self._inp)
 
-        # Nedre rad: Ny scanning (vänster) + ModeToggle (höger), lika breda
+        # Nedre rad
         bottom_row = QHBoxLayout()
         bottom_row.setSpacing(16)
 
@@ -635,18 +903,17 @@ class ResultsPage(QWidget):
         ql.setPixmap(make_qr_pixmap("ny scanning", 120))
         v.addWidget(ql)
         ny_card.clicked.connect(lambda: self._inp.setText("ny scanning"))
-        bottom_row.addWidget(ny_card, 1)   # stretch=1 → halva bredden
+        bottom_row.addWidget(ny_card, 1)
 
         self._toggle = ModeToggle()
         self._toggle.mode_changed.connect(self._on_mode_changed)
-        bottom_row.addWidget(self._toggle, 1)   # stretch=1 → halva bredden
+        bottom_row.addWidget(self._toggle, 1)
 
         outer.addLayout(bottom_row)
 
     def showEvent(self, _):
         QTimer.singleShot(80, self._inp.setFocus)
 
-    # ── Skanningsinput ────────────────────────────────────────────────────
     def _live(self, txt):
         key = txt.strip().lower()
         if key == "ny scanning":
@@ -664,49 +931,58 @@ class ResultsPage(QWidget):
         elif key == "byt lage":
             self._toggle.activate_via_scanner()
 
-    # ── Lägesbyte ─────────────────────────────────────────────────────────
     def _on_mode_changed(self, mode: str):
         self._current_mode = mode
         if self._last_food_list:
             self._render(self._last_food_list)
 
-    # ── Ladda ny data ─────────────────────────────────────────────────────
     def load(self, food_list: list, n: int):
-        """Anropas från MainWindow med hela food_list och antal skannade."""
         self._last_food_list = food_list
         self._render(food_list)
 
     def _render(self, food_list: list):
-        """Beräknar rätt resultat för aktuellt läge och ritar om alla kort."""
         mode = self._current_mode
 
         if mode == "meal":
             res = Miljodator.calc_meal(MY_FOODS, food_list)
-
             self._title.setText(f"Så mycket klimatpåverkan har din måltid ({len(food_list)} matvaror)")
-            self._subtitle.setText(
-                "Baserat på portionsstorlek och antal"
-            )
-
+            self._subtitle.setText("Baserat på portionsstorlek och antal")
             unit_suffix = ""
-
         else:
             res = Miljodator.calc_per_kg(MY_FOODS, food_list)
             unique_count = len(res["breakdown"])
             self._title.setText(f"Jämför livsmedel ({unique_count} unika varor)")
-            self._subtitle.setText(
-                "Varornas utsläpp per kg"
-            )
-
+            self._subtitle.setText("Varornas utsläpp per kg")
             unit_suffix = " / kg"
 
         breakdown = res["breakdown"]
 
-        # Stabil färgkarta (samma livsmedel = samma färg oavsett läge)
         color_map = {
             item["name"]: SEGMENT_COLORS[i % len(SEGMENT_COLORS)]
             for i, item in enumerate(breakdown)
         }
+
+        # ── Uppdatera planet-bannern (bara i måltidsläge) ─────────────────
+        # Ta bort gammalt widget
+        while self._planet_layout.count():
+            it = self._planet_layout.takeAt(0)
+            if it and it.widget():
+                w = it.widget()
+                if hasattr(w, '_anim'):
+                    w._anim.stop()
+                w.deleteLater()
+        self._planet_widget = None
+
+        if mode == "meal":
+            pw = PlanetWidget(res["co2"])
+            self._planet_layout.addWidget(pw)
+            self._planet_widget = pw
+            self._planet_container.setVisible(True)
+            self._planet_container.setMinimumHeight(100)
+            self._planet_container.setMaximumHeight(16777215)  # reset to unlimited
+        else:
+            self._planet_container.setVisible(False)
+            self._planet_container.setFixedHeight(0)
 
         # Rensa gamla kort
         while self._grid.count():
@@ -716,8 +992,6 @@ class ResultsPage(QWidget):
 
         totals = {"CO2": res["co2"], "Land": res["land"], "Water": res["water"]}
 
-        # meal_label_map: skickas till StackedDonutWidget i måltidsläge
-        # I per-kg läge är det None → widgeten faller tillbaka på strippad nyckel
         if mode == "meal":
             meal_label_map = {}
             for item in breakdown:
@@ -738,20 +1012,24 @@ class ResultsPage(QWidget):
             v.setContentsMargins(16, 14, 16, 14)
             v.setSpacing(6)
 
-            # Kortrubrik
             v.addWidget(lbl(title, 17, True, title_color))
             v.addWidget(hline(border))
 
-            # Verklig jämförelse (ersätter den gamla totalraden ovanför donut)
-            cmp_text = cmp_fn(total)
-            v.addWidget(lbl(cmp_text, 12, False, MUTED, Qt.AlignCenter))
+            if mode == "meal":
+                cmp_text = cmp_fn(total)
+                v.addWidget(lbl(cmp_text, 12, False, MUTED, Qt.AlignCenter))
 
-            # Donut-diagram
-            v.addWidget(
-                StackedDonutWidget(breakdown, metric, total, display_unit,
-                                   color_map, meal_label_map),
-                0, Qt.AlignCenter,
-            )
+            if mode == "meal":
+                v.addWidget(
+                    StackedDonutWidget(breakdown, metric, total, display_unit,
+                                       color_map, meal_label_map),
+                    0, Qt.AlignCenter,
+                )
+            else:
+                v.addWidget(
+                    HBarChartWidget(breakdown, metric, display_unit, color_map),
+                    0, Qt.AlignCenter,
+                )
 
             self._grid.addWidget(c, 0, col)
 
@@ -774,7 +1052,6 @@ class MainWindow(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Sidhuvud ──────────────────────────────────────────────────────
         hdr = QWidget()
         hdr.setFixedHeight(62)
         hdr.setStyleSheet(f"background:white;border-bottom:4px solid {PRIMARY_B};")
@@ -782,7 +1059,6 @@ class MainWindow(QWidget):
         hl.setContentsMargins(16, 0, 24, 0)
         hl.setSpacing(10)
 
-        # Logo (kraschar inte om filen saknas)
         logo = QLabel()
         logo.setStyleSheet("background:transparent;border:none;")
         logo_px = QPixmap("logga_magasinet.png")
@@ -819,7 +1095,7 @@ class MainWindow(QWidget):
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(0)
 
-        self._source_lbl = lbl("Källa: SAFAD (SLU)", 11, False, MUTED, Qt.AlignRight)
+        self._source_lbl = lbl("Källa: SAFAD (SLU) & WWF", 11, False, MUTED, Qt.AlignRight)
         self._tlbl       = lbl("", 11, False, MUTED, Qt.AlignRight)
         self._tlbl.setFixedWidth(160)
         self._source_lbl.setFixedWidth(160)
@@ -829,7 +1105,6 @@ class MainWindow(QWidget):
         hl.addWidget(right_box)
         root.addWidget(hdr)
 
-        # ── Tidsstapel ────────────────────────────────────────────────────
         self._tbar_bg = QWidget()
         self._tbar_bg.setFixedHeight(4)
         self._tbar_bg.setStyleSheet("background:#F3F4F6;border:none;")
@@ -837,17 +1112,14 @@ class MainWindow(QWidget):
         self._tbar.setStyleSheet(f"background:{ACCENT};border:none;")
         root.addWidget(self._tbar_bg)
 
-        # ── Sidor ─────────────────────────────────────────────────────────
         self._stack     = QStackedWidget()
         self._p_food    = FoodPage()
         self._p_results = ResultsPage()
-        # Ge ResultsPage tillgång till food_display_map för donut-förklaringarna
         self._p_results._p_food_display_map = self._p_food.food_display_map
         for p in (self._p_food, self._p_results):
             self._stack.addWidget(p)
         root.addWidget(self._stack)
 
-        # ── Signaler ──────────────────────────────────────────────────────
         self._p_food.calc_requested.connect(self._on_calc)
         self._p_food.reset_requested.connect(self._do_reset)
         self._p_results.new_scan.connect(self._new_scan)
@@ -883,23 +1155,17 @@ class MainWindow(QWidget):
 
     def _new_scan(self):
         self._p_food.reset()
-
-        # Återställ alltid resultatsidan till meal-läge
         self._p_results._current_mode = "meal"
         self._p_results._toggle._current = "meal"
         self._p_results._toggle._refresh()
-
         self._tsec = 200
         self._go(0)
 
     def _do_reset(self):
         self._p_food.reset()
-
-        # Återställ alltid resultatsidan till meal-läge
         self._p_results._current_mode = "meal"
         self._p_results._toggle._current = "meal"
         self._p_results._toggle._refresh()
-
         self._tactive = False
         self._tsec    = 200
         self._tlbl.setText("")
@@ -920,7 +1186,6 @@ class MainWindow(QWidget):
         self._tbar.setGeometry(0, 0, int(self._tbar_bg.width() * pct), 4)
 
 
-# ── Startpunkt ────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     f = QFont()
