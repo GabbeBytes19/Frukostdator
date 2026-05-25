@@ -218,8 +218,8 @@ class ModeToggle(QWidget):
 
     # (current_mode) → (label på knappen, scanner-kod)
     _LABELS = {
-        "meal":   ("📊 Jämför livsmedel per kg",    "byt läge"),
-        "per_kg": ("🍽️ Visa din måltid", "byt läge"),
+        "meal":   ("📊 Jämför livsmedel per kg",    "byt lage"),
+        "per_kg": ("🍽️ Visa din måltid", "byt lage"),
     }
 
     def __init__(self, parent=None):
@@ -477,7 +477,7 @@ class FoodPage(QWidget):
         action_row = QHBoxLayout()
         action_row.setSpacing(16)
         for label, code, txt_col, bg, border in [
-            ("✅ Beräkna",  "beräkna", "#065F46", PRIMARY_L, PRIMARY_B),
+            ("✅ Beräkna",  "berakna", "#065F46", PRIMARY_L, PRIMARY_B),
             ("↺ Börja om", "reset",   "#5B1F6B", MAUVE_L,   MAUVE_B),
         ]:
             c = make_card(bg, border)
@@ -652,7 +652,7 @@ class ResultsPage(QWidget):
         if key == "ny scanning":
             self.new_scan.emit()
             self._inp.clear()
-        elif key == "byt läge":
+        elif key == "byt lage":
             self._toggle.activate_via_scanner()
             self._inp.clear()
 
@@ -661,7 +661,7 @@ class ResultsPage(QWidget):
         self._inp.clear()
         if key == "ny scanning":
             self.new_scan.emit()
-        elif key == "byt läge":
+        elif key == "byt lage":
             self._toggle.activate_via_scanner()
 
     # ── Lägesbyte ─────────────────────────────────────────────────────────
