@@ -1,6 +1,6 @@
 # Frukostdator & Miljödator
 
-Interactive kiosk applications for [FenomenMagasinet](https://fenomenmagasinet.se), designed to teach visitors about nutrition and environmental impact of food. Both apps run on Raspberry Pi in full-screen kiosk mode and accept input via a barcode scanner.
+Interactive kiosk applications for [FenomenMagasinet](https://fenomenmagasinet.se), designed to teach visitors about nutrition and environmental impact of food. Both apps run on NUC in full-screen kiosk mode and accept input via a barcode scanner.
 
 ---
 
