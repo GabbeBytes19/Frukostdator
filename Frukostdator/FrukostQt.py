@@ -36,6 +36,7 @@ import Frukostdator
 # ── Database ─────────────────────────────────────────────────────────────
 _df = Frukostdator.get_excel_file()
 MY_FOODS = Frukostdator.get_food_and_info(_df)
+_BARCODE_MAP = Frukostdator.build_barcode_map(MY_FOODS)
 
 # ── Palette ───────────────────────────────────────────────────────────────
 # Primary brand colour: #A47A9B (164-122-155), dark: #754B7F
@@ -987,6 +988,7 @@ class FoodPage(QWidget):
             self.calc_requested.emit()
             self._inp.clear()
             return
+        key = Frukostdator.resolve_scan(key, _BARCODE_MAP)
         if key in MY_FOODS:
             self._add(key)
 
@@ -1001,6 +1003,7 @@ class FoodPage(QWidget):
         if key in ("berakna", "finish"):
             self.calc_requested.emit()
             return
+        key = Frukostdator.resolve_scan(key, _BARCODE_MAP)
         if key in MY_FOODS:
             self._add(key)
         else:

@@ -33,6 +33,7 @@ import Miljodator
 
 # ── Ladda livsmedelsdata ──────────────────────────────────────────────────
 MY_FOODS = Miljodator.get_food_impacts()
+_BARCODE_MAP = Miljodator.build_barcode_map(MY_FOODS)
 
 # ── Färgpalett ────────────────────────────────────────────────────────────
 BG       = "#F2F6F3"
@@ -793,10 +794,11 @@ class FoodPage(QWidget):
             self.reset_requested.emit()
             self._inp.clear()
             return
-        if key in ("beräkna", "berakna", "finish"):
+        if key in ("beräkna", "berakna", "berkna", "finish"):
             self.calc_requested.emit()
             self._inp.clear()
             return
+        key = Miljodator.resolve_scan(key, _BARCODE_MAP)
         if key in MY_FOODS:
             self._add(key)
 
@@ -808,9 +810,10 @@ class FoodPage(QWidget):
         if key == "reset":
             self.reset_requested.emit()
             return
-        if key in ("beräkna", "berakna", "finish"):
+        if key in ("beräkna", "berakna", "berkna", "finish"):
             self.calc_requested.emit()
             return
+        key = Miljodator.resolve_scan(key, _BARCODE_MAP)
         if key in MY_FOODS:
             self._add(key)
         else:

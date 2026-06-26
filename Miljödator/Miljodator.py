@@ -151,3 +151,16 @@ def calc_per_kg(foods: dict, food_list: list) -> dict:
     """
     unique = {name.strip().lower(): 1 for name in food_list}
     return _make_result(unique, foods, use_portions=False)
+
+
+def _strip_swedish(s):
+    return (s.replace('å', '').replace('ä', '').replace('ö', '').replace('ü', '')
+             .replace('Å', '').replace('Ä', '').replace('Ö', '').replace('Ü', ''))
+
+def build_barcode_map(foods_dict):
+    """Returns {barcode_string: canonical_swedish_name} built by stripping å/ä/ö/ü."""
+    return {_strip_swedish(name): name for name in foods_dict}
+
+def resolve_scan(text, barcode_map):
+    """Translates a barcode string (no special chars) to the canonical Swedish food name."""
+    return barcode_map.get(text, text)
