@@ -966,9 +966,19 @@ class FoodPage(QWidget):
 
         root.addStretch()
 
+        self._scan_buf = ''
+        self._buf_timer = QTimer(self)
+        self._buf_timer.setSingleShot(True)
+        self._buf_timer.timeout.connect(self._clear_scan_buf)
+
+    def _clear_scan_buf(self):
+        self._scan_buf = ''
+
     def reset(self):
         self.food_list = []
         self.food_counts = {}
+        self._scan_buf = ''
+        self._buf_timer.stop()
         self._inp.clear()
         self._fb.setText("")
         self._list_lbl.setText("")
@@ -993,22 +1003,29 @@ class FoodPage(QWidget):
             self._add(key)
 
     def _submit(self):
-        key = self._inp.text().strip().lower()
+        fragment = self._inp.text().strip().lower()
         self._inp.clear()
-        if not key:
+        if not fragment:
             return
-        if key == "reset":
+        if fragment == "reset":
+            self._scan_buf = ''
+            self._buf_timer.stop()
             self.reset_requested.emit()
             return
-        if key in ("berakna", "finish"):
+        if fragment in ("berakna", "finish"):
+            self._scan_buf = ''
+            self._buf_timer.stop()
             self.calc_requested.emit()
             return
-        key = Frukostdator.resolve_scan(key, _BARCODE_MAP)
+        combined = (self._scan_buf + fragment).strip()
+        key = Frukostdator.resolve_scan(combined, _BARCODE_MAP)
         if key in MY_FOODS:
+            self._scan_buf = ''
+            self._buf_timer.stop()
             self._add(key)
         else:
-            self._fb.setStyleSheet(f"color:{RED};background:transparent;")
-            self._fb.setText(f'Hittades inte: "{key}"')
+            self._scan_buf = combined
+            self._buf_timer.start(500)
 
     def _add(self, key):
         self.food_list.append(key)
