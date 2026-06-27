@@ -153,14 +153,18 @@ def calc_per_kg(foods: dict, food_list: list) -> dict:
     return _make_result(unique, foods, use_portions=False)
 
 
+import re as _re
+
 def _strip_swedish(s):
-    return (s.replace('å', '').replace('ä', '').replace('ö', '').replace('ü', '')
-             .replace('Å', '').replace('Ä', '').replace('Ö', '').replace('Ü', ''))
+    replaced = (s.replace('å', ' ').replace('ä', ' ').replace('ö', ' ').replace('ü', ' ')
+                 .replace('Å', ' ').replace('Ä', ' ').replace('Ö', ' ').replace('Ü', ' '))
+    return _re.sub(r' +', ' ', replaced).strip()
 
 def build_barcode_map(foods_dict):
-    """Returns {barcode_string: canonical_swedish_name} built by stripping å/ä/ö/ü."""
+    """Returns {barcode_string: canonical_swedish_name} built by replacing å/ä/ö/ü with space."""
     return {_strip_swedish(name): name for name in foods_dict}
 
 def resolve_scan(text, barcode_map):
     """Translates a barcode string (no special chars) to the canonical Swedish food name."""
-    return barcode_map.get(text, text)
+    normalized = _re.sub(r' +', ' ', text).strip()
+    return barcode_map.get(normalized, text)
